@@ -155,7 +155,7 @@ def create_latent_split(dataset_cfg, batch_size, split):
     assert split == 'train'
     name = dataset_cfg.name.upper()
     ds = LatentDataset(
-      root=os.path.join(dataset_cfg.root, split),
+      root=dataset_cfg.root,
       use_flip=True,
     )
     log_for_0(ds)

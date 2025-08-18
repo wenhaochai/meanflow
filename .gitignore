@@ -168,3 +168,6 @@ tmp/
 wandb
 wandb_logs
 data
+scripts/
+log/
+test/

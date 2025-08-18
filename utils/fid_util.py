@@ -83,8 +83,8 @@ def compute_stats(
 
     l_feats = []
     for i, x in enumerate(dataloader):
-        if i % 50 == 0:
-            logging.info(f"Evaluating {i} / {len(dataloader)}: {list(x.shape)}")
+        # if i % 50 == 0:
+        #     logging.info(f"Evaluating {i} / {len(dataloader)}: {list(x.shape)}")
         x = resize.forward(x)  # match the Pytorch version
         x = x.numpy().transpose(0,2,3,1)
         pred = inception_fn(inception_params, jax.lax.stop_gradient(x))

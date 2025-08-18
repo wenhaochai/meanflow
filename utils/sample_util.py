@@ -20,7 +20,7 @@ def generate_fid_samples(state, workdir, config, p_sample_step, run_p_sample_ste
   for step in range(num_steps):
     sample_idx = jax.process_index() * jax.local_device_count() + jnp.arange(jax.local_device_count())
     sample_idx = jax.device_count() * step + sample_idx
-    log_for_0(f'Sampling step {step} / {num_steps}...')
+    # log_for_0(f'Sampling step {step} / {num_steps}...')
     samples = run_p_sample_step(p_sample_step, state, sample_idx=sample_idx, ema=ema)
     samples = jax.device_get(samples)
     samples_all.append(samples)

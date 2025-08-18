@@ -11,7 +11,7 @@ def restore_checkpoint(state, workdir):
 
 
 def save_checkpoint(state, workdir):
-  state = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state))
+  state = jax.device_get(jax.tree.map(lambda x: x[0], state))
   step = int(state.step)
   log_for_0('Saving checkpoint step %d.', step)
   checkpoints.save_checkpoint_multiprocess(workdir, state, step, keep=3)

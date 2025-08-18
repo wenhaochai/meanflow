@@ -69,7 +69,8 @@ class LatentManager:
 
         lowered = p_decode_fn.lower(p_vae_variable, z_dummy)
         compiled_decod_fn = lowered.compile()
-        Bflops = compiled_decod_fn.cost_analysis()[0]['flops'] / 1e9
+        costs = compiled_decod_fn.cost_analysis()
+        Bflops = costs.get('flops', 0.0) / 1e9        
         log_for_0('Compiling VAE decoder done')
         log_for_0(f'FLOPs (1e9): {Bflops}')
   
@@ -97,12 +98,33 @@ class LatentManager:
 
 class LatentDataset(torch.utils.data.Dataset):
     def __init__(self, root, use_flip=False):
-        self.root = root
-        self.file_list = [file for file in os.listdir(root) if file.endswith('.pt')]
+        import time
         self.use_flip = use_flip
+        self.root = root
+        
+        # root is the path to the merged file
+        merged_file = root
+        
+        if not os.path.exists(merged_file):
+            raise FileNotFoundError(f"Merged file not found at {merged_file}")
+        
+        log_for_0(f"Loading entire dataset from merged file: {merged_file}")
+        log_for_0(f"File size: {os.path.getsize(merged_file) / (1024**3):.1f}GB")
+        log_for_0("This may take 1-2 minutes, please wait...")
+        
+        load_start = time.time()
+        self.data = torch.load(merged_file, map_location='cpu')
+        load_time = time.time() - load_start
+        
+        self.images = self.data['images']
+        self.labels = self.data['labels']
+        self.total_samples = len(self.images)
+        
+        log_for_0(f"Loaded {self.total_samples:,} samples into memory in {load_time:.1f}s")
+        log_for_0(f"Memory usage: ~{self.total_samples * 4 * 32 * 32 / (1024**3):.1f}GB")
 
     def __len__(self):
-        return len(self.file_list)
+        return self.total_samples
     
     def __repr__(self) -> str:
         head = "Dataset " + self.__class__.__name__
@@ -114,7 +136,6 @@ class LatentDataset(torch.utils.data.Dataset):
         return "\n".join(lines)
 
     def __getitem__(self, idx):
-        file_path = os.path.join(self.root, self.file_list[idx])
-        data = torch.load(file_path)
-        return data['image'], data['label']
+        # Direct memory access - extremely fast!
+        return self.images[idx], self.labels[idx]
 

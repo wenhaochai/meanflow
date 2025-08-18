@@ -116,9 +116,10 @@ def prepare_batch_data_encode(batch):
 
 
 def compute_latent_dataset(imagenet_root, output_dir, vae_type, batch_size, image_size, overwrite=False):
-    """Compute and save latent dataset from ImageNet."""
+    """Compute and save latent dataset from ImageNet as a single large file."""
     from torchvision import datasets
     from tqdm import tqdm
+    import time
 
     from utils.logging_util import log_for_0
     
@@ -150,14 +151,14 @@ def compute_latent_dataset(imagenet_root, output_dir, vae_type, batch_size, imag
     )
     
     for split in ['train']:
-        split_output_dir = os.path.join(output_dir, split)
-        os.makedirs(split_output_dir, exist_ok=True)
+        # Single file output
+        output_file = os.path.join(output_dir, f"{split}_merged.pt")
         
         # Check if already exists and not overwriting
-        if not overwrite and os.path.exists(split_output_dir) and os.listdir(split_output_dir):
-            log_for_0(f"Split {split} already exists, skipping...")
+        if not overwrite and os.path.exists(output_file):
+            log_for_0(f"Single file {output_file} already exists, skipping...")
             continue
-            
+        
         log_for_0(f"Processing {split} split...")
         
         # Create dataloader
@@ -165,26 +166,15 @@ def compute_latent_dataset(imagenet_root, output_dir, vae_type, batch_size, imag
             imagenet_root, split, batch_size, image_size
         )
         
-        # Calculate starting index for this worker to avoid filename conflicts
-        rank = jax.process_index()
-        num_replicas = jax.process_count()
+        log_for_0(f"Total samples to process: {total_samples}")
+        log_for_0("Collecting all samples in memory...")
         
-        # Calculate the starting index based on distributed sampling logic
-        # DistributedSampler distributes samples evenly across workers
-        samples_per_worker = total_samples // num_replicas
-        remainder = total_samples % num_replicas
+        all_images = []
+        all_labels = []
         
-        # Workers with rank < remainder get one extra sample
-        if rank < remainder:
-            start_idx = rank * (samples_per_worker + 1)
-        else:
-            start_idx = rank * samples_per_worker + remainder
+        sample_count = 0
+        start_time = time.time()
         
-        log_for_0(f"Worker {rank}: processing {dataset_size} samples, starting from index {start_idx}")
-        log_for_0(f"Total samples: {total_samples}, samples per worker: {samples_per_worker}, remainder: {remainder}")
-        
-        # Process batches
-        sample_idx = start_idx
         for batch_idx, batch in enumerate(tqdm(dataloader, desc=f"Processing {split}")):
             # Prepare batch
             batch_data = prepare_batch_data_encode(batch)
@@ -196,27 +186,46 @@ def compute_latent_dataset(imagenet_root, output_dir, vae_type, batch_size, imag
             # Only process the original batch size (ignore padded samples)
             original_batch_size = batch_data['original_batch_size']
             
-            # Save individual samples
+            # Process samples
             for i in range(original_batch_size):
-                if sample_idx >= start_idx + dataset_size:
-                    break
-                    
-                # Transpose latent to match expected shape (B, C, H, W)
+                # Transpose latent to match expected shape (C, H, W)
                 latent = torch.tensor(np.array(latents[i]))
                 latent = latent.permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
                 
-                sample_data = {
-                    'image': latent,
-                    'label': torch.tensor(np.array(labels[i]))
-                }
-                
-                filename = f"{sample_idx:08d}.pt"
-                filepath = os.path.join(split_output_dir, filename)
-                torch.save(sample_data, filepath)
-                
-                sample_idx += 1
+                all_images.append(latent)
+                all_labels.append(torch.tensor(np.array(labels[i])))
+                sample_count += 1
             
+            # Progress logging
             if batch_idx % 100 == 0:
-                log_for_0(f"Progress {split}: {batch_idx} batches, {sample_idx} samples")
+                elapsed = time.time() - start_time
+                rate = sample_count / elapsed if elapsed > 0 else 0
+                log_for_0(f"Progress {split}: {sample_count}/{total_samples} samples ({rate:.1f} samples/s)")
         
-        log_for_0(f"Completed {split} split: {sample_idx} samples saved")
+        # Save single file
+        log_for_0(f"Saving {len(all_images)} samples to single file...")
+        save_start = time.time()
+        
+        final_data = {
+            'images': torch.stack(all_images),
+            'labels': torch.stack(all_labels),
+            'metadata': {
+                'total_samples': len(all_images),
+                'latent_size': latent_size,
+                'vae_type': vae_type,
+                'created_at': time.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        }
+        
+        os.makedirs(output_dir, exist_ok=True)
+        torch.save(final_data, output_file)
+        
+        save_time = time.time() - save_start
+        file_size = os.path.getsize(output_file) / (1024**3)  # GB
+        
+        log_for_0(f"Successfully saved {len(all_images)} samples to {output_file}")
+        log_for_0(f"File size: {file_size:.2f} GB")
+        log_for_0(f"Save time: {save_time:.1f}s")
+        
+        total_time = time.time() - start_time
+        log_for_0(f"Completed {split} split: {sample_count} samples in {total_time:.1f}s")

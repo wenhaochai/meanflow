@@ -13,9 +13,9 @@ def get_config():
   config.dataset = dataset = ml_collections.ConfigDict()
   
   dataset.name = 'imgnet_latent'
-  dataset.root = 'DATA_ROOT'
+  dataset.root = '/path/to/work/data/imagenet/train_official_processed'
 
-  dataset.num_workers = 4
+  dataset.num_workers = 0
   dataset.prefetch_factor = 2
   dataset.pin_memory = False
   dataset.cache = False
@@ -32,7 +32,7 @@ def get_config():
   training.learning_rate = 0.0001
   training.batch_size = 256
 
-  training.num_epochs = 1000
+  training.num_epochs = 240
   training.log_per_step = 100
   training.sample_per_epoch = 10
   training.checkpoint_per_epoch = 10
@@ -43,6 +43,7 @@ def get_config():
 
   training.adam_b2 = 0.95
   training.ema_val = 0.9999
+  training.ema_type = 'const'
 
   # ------------------------------------------------------------
   # MeanFlow
@@ -90,7 +91,7 @@ def get_config():
   fid.on_training = True
   fid.num_samples = 50000
   fid.device_batch_size = 128
-  fid.cache_ref = 'FID_CACHE_REF'
+  fid.cache_ref = '/path/to/work/data/imagenet/imgnet256_adm.npz'
 
   # others
   config.load_from = None
