@@ -266,14 +266,13 @@ def get_fid_evaluator(workdir, config, writer, p_sample_step, latent_manager):
     
     # Log to WandB - ensure we have access to global variables
     if WANDB_AVAILABLE and wandb.run is not None and jax.process_index() == 0:
-      log_for_0(f'Logging FID metrics to WandB: FID={fid_score:.5f}')
       wandb.log({
-        'fid/fid_ema': fid_score,
-        'fid/fid_eval_time': fid_eval_total_time,
-        'fid/fid_sample_gen_time': sample_gen_time,
-        'fid/fid_stats_time': stats_time,
-      }, commit=True)
-      log_for_0(f'Successfully logged FID metrics to WandB')
+        'fid_quality/FID_ema': fid_score,
+        'fid_timing/fid_eval_time': fid_eval_total_time,
+        'fid_timing/fid_sample_gen_time': sample_gen_time,
+        'fid_timing/fid_stats_time': stats_time,
+      }, step=epoch+1, commit=True)
+      
   return evaluator
 
 #######################################################
