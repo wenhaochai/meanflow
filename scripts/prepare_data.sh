@@ -22,8 +22,8 @@ export salt=`head /dev/urandom | tr -dc a-z0-9 | head -c6`
 export JOBNAME=prepare_data_${now}_${salt}_$1
 export LOG_DIR=$LOG_DIR/$USER/$JOBNAME
 
-sudo mkdir -p ${LOG_DIR}
-sudo chmod 777 -R ${LOG_DIR}
+mkdir -p ${LOG_DIR}
+chmod 777 -R ${LOG_DIR}
 
 # Image size configuration (common sizes: 256, 512, 1024)
 # Corresponding latent sizes will be: 32x32, 64x64, 128x128
@@ -52,10 +52,10 @@ fi
 echo "=============================================="
 
 python3 prepare_dataset.py \
-    --imagenet_root=\"$IMAGENET_ROOT\" \
-    --output_dir=\"$OUTPUT_DIR\" \
+    --imagenet_root="$IMAGENET_ROOT" \
+    --output_dir="$OUTPUT_DIR" \
     --batch_size=$BATCH_SIZE \
-    --vae_type=\"$VAE_TYPE\" \
+    --vae_type="$VAE_TYPE" \
     --image_size=$IMAGE_SIZE \
     --compute_latent=$COMPUTE_LATENT \
     --compute_fid=$COMPUTE_FID \

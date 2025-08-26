@@ -13,7 +13,7 @@ def get_config():
   config.dataset = dataset = ml_collections.ConfigDict()
   
   dataset.name = 'imgnet_latent'
-  dataset.root = '/path/to/work/data/imagenet/train_official_processed'
+  dataset.root = '/path/to/work/data/imagenet/train_merged_backup.pt'
 
   dataset.num_workers = 0
   dataset.prefetch_factor = 2
@@ -74,7 +74,11 @@ def get_config():
   # ------------------------------------------------------------
   # model
   config.model = model = ml_collections.ConfigDict()
-  model.cls = 'DiT_B_4'
+  model.cls = 'LoopedDiT_B_4'
+  model.n_prefix = 0
+  model.n_shared = 3
+  model.n_loops = 4
+  model.n_suffix = 0
 
   # ------------------------------------------------------------
   # Sampling
@@ -90,8 +94,33 @@ def get_config():
   config.fid = fid = ml_collections.ConfigDict()
   fid.on_training = True
   fid.num_samples = 50000
-  fid.device_batch_size = 128
+  fid.device_batch_size = 16
+  fid.stats_batch_size = 200
   fid.cache_ref = '/path/to/work/data/imagenet/imgnet256_adm.npz'
+
+  # ------------------------------------------------------------
+  # WandB (Weights & Biases) Configuration
+  config.wandb = wandb = ml_collections.ConfigDict()
+  wandb.enable = True                    # Enable/disable wandb logging
+  wandb.root = '/path/to/work/project/meanflow'
+  wandb.project = 'meanflow'             # WandB project name
+  wandb.entity = 'reself'                # WandB entity (username/team), None for default
+  wandb.name = None                      # Run name, None for auto-generated
+  wandb.tags = []                        # List of tags for the run
+  wandb.notes = ''                       # Notes for the run
+  wandb.group = 'baseline'               # Group name for organizing runs
+  wandb.job_type = 'train'               # Job type (train, eval, etc.)
+  wandb.mode = 'offline'                 # 'online', 'offline', or 'disabled'
+  wandb.save_code = False                # Save code to wandb
+
+  # ------------------------------------------------------------
+  # System Configuration
+  config.system = system = ml_collections.ConfigDict()
+  system.set_compilation_cache = True  # Whether to set JAX compilation cache
+  system.jax_compilation_cache_root = '/path/to/work/jax_cache'  # JAX compilation cache root directory
+  system.cache_min_compile_time = 0.1  # Minimum compilation time (seconds) to cache
+  system.cache_max_size_gb = 5  # Maximum cache size in GB
+  system.cache_debug = False  # Enable cache debugging and miss explanation
 
   # others
   config.load_from = None

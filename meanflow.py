@@ -4,6 +4,7 @@ import jax.numpy as jnp
 
 # Import your models here
 from models import models_dit
+from models import models_loopeddit
 
 
 def generate(variable, model, rng, n_sample, config, class_idx=None):
@@ -92,8 +93,27 @@ class MeanFlow(nn.Module):
   def setup(self):
     model_str = self.model_str
 
-    net_fn = getattr(models_dit, model_str)
-    self.net = net_fn(name="net", class_dropout_prob=0.0)
+    # Try to get model from models_dit first, then models_loopeddit
+    if hasattr(models_dit, model_str):
+      net_fn = getattr(models_dit, model_str)
+      # Regular DiT models - only pass standard parameters
+      self.net = net_fn(name="net", class_dropout_prob=0.0)
+    elif hasattr(models_loopeddit, model_str):
+      net_fn = getattr(models_loopeddit, model_str)
+      # LoopedDiT models - pass looping architecture parameters from config
+      looped_params = {}
+      if 'n_prefix' in self.model_config:
+        looped_params['n_prefix'] = self.model_config['n_prefix']
+      if 'n_shared' in self.model_config:
+        looped_params['n_shared'] = self.model_config['n_shared']
+      if 'n_loops' in self.model_config:
+        looped_params['n_loops'] = self.model_config['n_loops']
+      if 'n_suffix' in self.model_config:
+        looped_params['n_suffix'] = self.model_config['n_suffix']
+      
+      self.net = net_fn(name="net", class_dropout_prob=0.0, **looped_params)
+    else:
+      raise ValueError(f"Model '{model_str}' not found in models_dit or models_loopeddit")
 
   #######################################################
   # Solver
