@@ -528,8 +528,7 @@ def train_and_evaluate(
       or (epoch+1) == config.training.num_epochs
     ):
       checkpoint_start_time = time.time()
-      log_for_0(f'Saving checkpoint at epoch {epoch}...')
-      save_checkpoint(state, workdir)
+      save_checkpoint(state, workdir, epoch=epoch+1)
       checkpoint_time = time.time() - checkpoint_start_time
       log_for_0(f'Checkpoint saved in {checkpoint_time:.2f}s')
 

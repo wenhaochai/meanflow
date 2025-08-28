@@ -10,9 +10,15 @@ def restore_checkpoint(state, workdir):
   return state
 
 
-def save_checkpoint(state, workdir):
+def save_checkpoint(state, workdir, epoch=None):
   state = jax.device_get(jax.tree.map(lambda x: x[0], state))
-  step = int(state.step)
-  log_for_0('Saving checkpoint step %d.', step)
-  checkpoints.save_checkpoint_multiprocess(workdir, state, step, keep=3)
-  log_for_0('Checkpoint step %d saved.', step)
+  if epoch is not None:
+    log_for_0('Saving checkpoint epoch %d.', epoch)
+    checkpoints.save_checkpoint_multiprocess(workdir, state, epoch, keep=3)
+    log_for_0('Checkpoint epoch %d saved.', epoch)
+  else:
+    # Fallback to step for backward compatibility
+    step = int(state.step)
+    log_for_0('Saving checkpoint step %d.', step)
+    checkpoints.save_checkpoint_multiprocess(workdir, state, step, keep=3)
+    log_for_0('Checkpoint step %d saved.', step)
