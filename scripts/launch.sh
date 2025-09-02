@@ -2,6 +2,7 @@
 
 # Note: You should update the dataset.root and fid.cache_ref in configs/run_*_config.yml
 
+# suggest use absolute path
 export LOG_DIR="/path/to/work/project/meanflow/log"
 
 # Parse arguments

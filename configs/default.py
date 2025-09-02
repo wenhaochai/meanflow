@@ -37,7 +37,7 @@ def get_config():
   training.sample_per_epoch = 10
   training.checkpoint_per_epoch = 10
   training.fid_per_epoch = 10
-  training.half_precision = False
+  training.half_precision = False # Not supported
   
   training.seed = 42
 
