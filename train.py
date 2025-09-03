@@ -186,9 +186,13 @@ def train_step_with_vae(state, batch, rng_init, config, lr, ema_fn, latent_mnger
   aux, grads = grad_fn(state.params)
   grads = lax.pmean(grads, axis_name='batch')
 
+  # Minimal gradient monitoring (no clipping): global norm
+  grad_global_norm = jnp.sqrt(sum([jnp.sum(jnp.square(x)) for x in jax.tree.leaves(grads)]))
+
   dict_losses, = aux[1]
   metrics = compute_metrics(dict_losses)
   metrics["lr"] = lr
+  metrics["grad_norm"] = grad_global_norm
 
   # Parameter update
   new_state = state.apply_gradients(
@@ -504,6 +508,7 @@ def train_and_evaluate(
             'training/loss': summary.get('loss', 0),
             'training/lr': summary.get('lr', 0),
             'training/steps_per_second': summary.get('steps_per_second', 0),
+            'training/grad_norm': summary.get('grad_norm', 0),
             
             # Timing metrics
             'timing/data_load_time': avg_data_load,
@@ -512,11 +517,6 @@ def train_and_evaluate(
           }
           wandb.log(wandb_metrics, step=step+1, commit=True)
 
-        # log_for_0(
-        #   'train epoch: %d, step: %d, loss: %.6f, steps/sec: %.2f, avg_data_load: %.4fs, avg_data_prep: %.4fs, avg_train_step: %.4fs',
-        #   epoch, step, summary['loss'], summary['steps_per_second'], 
-        #   avg_data_load, avg_data_prep, avg_train_step
-        # )
         train_metrics = []
 
     epoch_train_time = time.time() - epoch_train_start_time

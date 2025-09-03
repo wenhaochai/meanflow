@@ -5,13 +5,11 @@
 # suggest use absolute path
 export LOG_DIR="/path/to/work/project/meanflow/log"
 
-# Parse arguments
-MODEL_CONFIG=${1:-b4}
-JOB_NAME=${2:-default}
+MODEL_CONFIG=${1:-loopb4p0s2l6e0}
+JOB_NAME=${2:-${MODEL_CONFIG}}
 
 export now=`date '+%Y%m%d_%H%M%S'`
-# Generate job name: description_timestamp (no random salt)
-export JOBNAME=${MODEL_CONFIG}_${JOB_NAME}_${now}
+export JOBNAME=${JOB_NAME}_${now}
 export LOG_DIR=$LOG_DIR/$USER/$JOBNAME
 
 mkdir -p ${LOG_DIR}

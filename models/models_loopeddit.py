@@ -16,10 +16,21 @@ from models.timm_models import PatchEmbed
 
 class LoopedDiT(nn.Module):
     """
-    Segmented Looped version of DiT:
-    - First p prefix blocks (independent)
-    - Middle s blocks shared and looped l times  
-    - Final e suffix blocks (independent)
+    Segmented Looped version of DiT with loop-step conditioning.
+
+    Design:
+    - Prefix (p): independent blocks executed once at the beginning.
+    - Shared (s) × Loops (l): a set of blocks executed l times with parameter sharing.
+    - Suffix (e): independent blocks executed once at the end.
+
+    t_loop (loop-step embedding):
+    - We inject a scalar loop-step "time" per stage/iteration and embed it via the same
+      TimestepEmbedder used elsewhere. The embedded vector is added into the global
+      condition c, which feeds adaLN modulation (LN/FiLM) in each block.
+    - Convention (aligned with denoise from 1→0): prefix uses t_loop=1.0, suffix uses t_loop=0.0.
+      For the shared loops, t_loop linearly spans [1, 0] over loop_idx ∈ [0, l-1].
+    - This enables the shared block to specialize across iterations without adding
+      parameters, improving phase separation and few-step quality.
     """
     input_size: int = 32
     patch_size: int = 2
@@ -42,6 +53,10 @@ class LoopedDiT(nn.Module):
         self.x_embedder = PatchEmbed(self.input_size, self.patch_size, self.in_channels, self.hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(self.hidden_size)
         self.h_embedder = TimestepEmbedder(self.hidden_size)
+        # Loop-step embedder for per-iteration conditioning (t_loop)
+        # Note: we re-use the same embedding machinery (sinusoidal + small MLP)
+        # to keep scales compatible with other condition signals.
+        self.l_embedder = TimestepEmbedder(self.hidden_size)
         self.y_embedder = LabelEmbedder(self.num_classes, self.hidden_size, self.class_dropout_prob)
         
         num_patches = self.x_embedder.num_patches
@@ -85,30 +100,57 @@ class LoopedDiT(nn.Module):
 
     def __call__(self, x, t, h, y, train=False, key=None):
         """
-        Segmented looped forward pass - same interface as DiT
+        Segmented looped forward pass - same interface as DiT.
+
+        Inputs
+        - x: (B, H, W, C) input
+        - t: (B,) diffusion timestep (or any continuous-time signal)
+        - h: (B,) auxiliary time-like signal (e.g., step size/interval)
+        - y: (B,) class labels
+        - train/key: as in the base DiT
+
+        Conditioning
+        - Base condition: c = t_emb + h_emb + y_emb
+        - Stage/iteration condition: c_stage = c + l_emb(t_loop)
+          where t_loop encodes the current stage: prefix=1.0, loops∈[1,0], suffix=0.0
         """
         # Same initial processing as original DiT
         x = self.x_embedder(x) + self.pos_embed_func()
         t = self.t_embedder(t)
         h = self.h_embedder(h)
         y = self.y_embedder(y, train=train, rng=key)
-        c = t + h + y
+        c = t + h + y  # base condition
+
+        # Small helper to embed a scalar t_loop ∈ [0, 1] for the whole batch
+        bsz = x.shape[0]
+        def loop_emb_from_scalar(scalar):
+            s_vec = jnp.full((bsz,), float(scalar), dtype=jnp.float32)
+            return self.l_embedder(s_vec)
 
         # 1. Apply prefix blocks (independent)
         if self.n_prefix > 0:
+            # Use t_loop = 1.0 to denote the "early"/prefix phase (denoise-aligned)
+            c_prefix = c + loop_emb_from_scalar(1.0)
             for block in self.prefix_blocks.layers:
-                x = block(x, c)
+                x = block(x, c_prefix)
         
         # 2. Apply shared blocks in loops 
         if self.n_shared > 0 and self.n_loops > 0:
+            # Linearly sweep t_loop ∈ [1, 0] across loop iterations.
+            # When n_loops==1, we set t_loop=1.0.
+            denom = max(self.n_loops - 1, 1)
             for loop_idx in range(self.n_loops):
+                t_loop_scalar = 1.0 - (loop_idx / denom)
+                c_loop = c + loop_emb_from_scalar(t_loop_scalar)
                 for block in self.shared_blocks.layers:
-                    x = block(x, c)
+                    x = block(x, c_loop)
         
         # 3. Apply suffix blocks (independent)
         if self.n_suffix > 0:
+            # Use t_loop = 0.0 to denote the "late"/suffix phase (denoise-aligned)
+            c_suffix = c + loop_emb_from_scalar(0.0)
             for block in self.suffix_blocks.layers:
-                x = block(x, c)
+                x = block(x, c_suffix)
         
         # Same final processing
         x = self.final_layer(x, c)
