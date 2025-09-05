@@ -5,6 +5,7 @@ model:
     n_shared: 2   # Number of shared blocks for looping  
     n_loops: 6    # Number of times to loop the shared blocks
     n_suffix: 0   # Number of suffix blocks (independent)
+    use_loop_emb: False
 
 training:
     sample_on_training: False

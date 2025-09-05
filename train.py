@@ -126,7 +126,7 @@ def create_train_state(
   _, params = initialized(rng_init, image_size, model)
   ema_params = deepcopy(params)
   ema_params = update_ema(ema_params, params, 0)
-  print_params(params['net'])
+  # print_params(params['net'])
   tx = optax.adamw(
       learning_rate=lr_value,
       weight_decay=0,
@@ -327,14 +327,19 @@ def train_and_evaluate(
   if local_batch_size % jax.local_device_count() > 0:
     raise ValueError('Local batch size must be divisible by the number of local devices')
 
-  train_loader, steps_per_epoch = input_pipeline.create_split(
-    config.dataset,
-    local_batch_size,
-    split='train',
-  )
-  log_for_0('Steps per Epoch: {}'.format(steps_per_epoch))
-  dataloader_time = time.time() - dataloader_start_time
-  log_for_0(f'=== Data loader creation completed in {dataloader_time:.2f}s ===')
+    # Skip data loading for evaluation-only mode
+  if config.eval_only:
+    steps_per_epoch = 1 # avoid bug
+    log_for_0('Skipping data loader creation for eval-only mode')
+  else:
+    train_loader, steps_per_epoch = input_pipeline.create_split(
+      config.dataset,
+      local_batch_size,
+      split='train',
+    )
+    log_for_0('Steps per Epoch: {}'.format(steps_per_epoch))
+    dataloader_time = time.time() - dataloader_start_time
+    log_for_0(f'=== Data loader creation completed in {dataloader_time:.2f}s ===')
 
   ########### Create Model ###########
   model_start_time = time.time()
@@ -375,19 +380,24 @@ def train_and_evaluate(
 
   compilation_setup_start_time = time.time()
   log_for_0('=== Starting compilation setup ===')
-  p_train_step = jax.pmap(
-      partial(
-        train_step_with_vae, 
-        rng_init=rng, 
-        config=config, 
-        lr=base_lr,
-        ema_fn=ema_fn,
-        latent_mnger=latent_manager,
-      ),
-      axis_name='batch',
-  )
-  train_metrics = []
-  log_for_0('Initial compilation, this might take some minutes...')
+  
+  # Only compile training step if not in eval-only mode
+  if not config.eval_only:
+    p_train_step = jax.pmap(
+        partial(
+          train_step_with_vae, 
+          rng_init=rng, 
+          config=config, 
+          lr=base_lr,
+          ema_fn=ema_fn,
+          latent_mnger=latent_manager,
+        ),
+        axis_name='batch',
+    )
+    train_metrics = []
+    log_for_0('Training step compilation, this might take some minutes...')
+  else:
+    log_for_0('Skipping training step compilation for eval-only mode')
 
   vis_sample_idx = jax.process_index() * jax.local_device_count() + jnp.arange(jax.local_device_count())
 
@@ -438,12 +448,13 @@ def train_and_evaluate(
       writer.write_images(epoch+1, {'vis_sample': vis_sample})
       writer.flush()
       
-      # Log sample images to WandB
-      if WANDB_AVAILABLE and wandb.run is not None and jax.process_index() == 0:
-        # Convert to wandb Image format
-        # vis_sample is expected to be numpy array with shape (H, W, C) and values in [0, 1]
-        wandb_image = wandb.Image(vis_sample, caption=f"Generated samples at epoch {epoch}")
-        wandb.log({"samples/generated": wandb_image}, commit=True)
+      # Log sample images to WandB - Currently not supported
+      # TODO: Re-enable after fixing image format compatibility issues
+      # if WANDB_AVAILABLE and wandb.run is not None and jax.process_index() == 0:
+      #   # Convert to wandb Image format
+      #   # vis_sample is expected to be numpy array with shape (H, W, C) and values in [0, 1]
+      #   wandb_image = wandb.Image(vis_sample, caption=f"Generated samples at epoch {epoch}")
+      #   wandb.log({"samples/generated": wandb_image}, commit=True)
       
       sampling_time = time.time() - sampling_start_time
       log_for_0(f'Sampling at epoch {epoch} completed in {sampling_time:.2f}s')
@@ -451,7 +462,6 @@ def train_and_evaluate(
     ########### Train ###########
     epoch_train_start_time = time.time()
     timer = Timer()
-    log_for_0('epoch {}...'.format(epoch))
     timer.reset()
     
     data_load_times = []

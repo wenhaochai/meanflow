@@ -110,6 +110,9 @@ class MeanFlow(nn.Module):
         looped_params['n_loops'] = self.model_config['n_loops']
       if 'n_suffix' in self.model_config:
         looped_params['n_suffix'] = self.model_config['n_suffix']
+      # Optional loop-step embedding toggle
+      if 'use_loop_emb' in self.model_config:
+        looped_params['use_loop_emb'] = self.model_config['use_loop_emb']
       
       self.net = net_fn(name="net", class_dropout_prob=0.0, **looped_params)
     else:

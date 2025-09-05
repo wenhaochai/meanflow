@@ -34,6 +34,7 @@ def get_config():
 
   training.num_epochs = 240
   training.log_per_step = 100
+  training.sample_on_training = False
   training.sample_per_epoch = 10
   training.checkpoint_per_epoch = 10
   training.fid_per_epoch = 10
@@ -79,6 +80,7 @@ def get_config():
   model.n_shared = 3
   model.n_loops = 4
   model.n_suffix = 0
+  model.use_loop_emb = False  # Whether to use loop-step conditioning
 
   # ------------------------------------------------------------
   # Sampling
@@ -112,6 +114,10 @@ def get_config():
   wandb.job_type = 'train'               # Job type (train, eval, etc.)
   wandb.mode = 'offline'                 # 'online', 'offline', or 'disabled'
   wandb.save_code = False                # Save code to wandb
+  
+  # Loop Evaluation Configuration
+  config.evaluation = evaluation = ml_collections.ConfigDict()
+  evaluation.loop_list = []              # List of loop counts to evaluate (for LoopedDiT)
 
   # ------------------------------------------------------------
   # System Configuration

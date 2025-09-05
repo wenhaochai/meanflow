@@ -45,6 +45,7 @@ class LoopedDiT(nn.Module):
     class_dropout_prob: float = 0.1
     num_classes: int = 1000
     learn_sigma: bool = False
+    use_loop_emb: bool = True  # Whether to use loop-step conditioning
     
     def setup(self):
         self.out_channels = self.in_channels * 2 if self.learn_sigma else self.in_channels
@@ -53,10 +54,11 @@ class LoopedDiT(nn.Module):
         self.x_embedder = PatchEmbed(self.input_size, self.patch_size, self.in_channels, self.hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(self.hidden_size)
         self.h_embedder = TimestepEmbedder(self.hidden_size)
-        # Loop-step embedder for per-iteration conditioning (t_loop)
+        # Loop-step embedder for per-iteration conditioning (t_loop) - only if enabled
         # Note: we re-use the same embedding machinery (sinusoidal + small MLP)
         # to keep scales compatible with other condition signals.
-        self.l_embedder = TimestepEmbedder(self.hidden_size)
+        if self.use_loop_emb:
+            self.l_embedder = TimestepEmbedder(self.hidden_size)
         self.y_embedder = LabelEmbedder(self.num_classes, self.hidden_size, self.class_dropout_prob)
         
         num_patches = self.x_embedder.num_patches
@@ -121,34 +123,39 @@ class LoopedDiT(nn.Module):
         y = self.y_embedder(y, train=train, rng=key)
         c = t + h + y  # base condition
 
-        # Small helper to embed a scalar t_loop ∈ [0, 1] for the whole batch
+        # Small helper to embed a scalar t_loop ∈ [0, 1] for the whole batch (only if loop_emb enabled)
         bsz = x.shape[0]
-        def loop_emb_from_scalar(scalar):
-            s_vec = jnp.full((bsz,), float(scalar), dtype=jnp.float32)
-            return self.l_embedder(s_vec)
+        if self.use_loop_emb:
+            def loop_emb_from_scalar(scalar):
+                s_vec = jnp.full((bsz,), float(scalar), dtype=jnp.float32)
+                return self.l_embedder(s_vec)
 
         # 1. Apply prefix blocks (independent)
         if self.n_prefix > 0:
-            # Use t_loop = 1.0 to denote the "early"/prefix phase (denoise-aligned)
-            c_prefix = c + loop_emb_from_scalar(1.0)
+            # Use t_loop = 1.0 to denote the "early"/prefix phase (denoise-aligned) if enabled
+            c_prefix = c + loop_emb_from_scalar(1.0) if self.use_loop_emb else c
             for block in self.prefix_blocks.layers:
                 x = block(x, c_prefix)
         
         # 2. Apply shared blocks in loops 
         if self.n_shared > 0 and self.n_loops > 0:
-            # Linearly sweep t_loop ∈ [1, 0] across loop iterations.
+            # Linearly sweep t_loop ∈ [1, 0] across loop iterations (only if loop_emb enabled).
             # When n_loops==1, we set t_loop=1.0.
-            denom = max(self.n_loops - 1, 1)
+            if self.use_loop_emb:
+                denom = max(self.n_loops - 1, 1)
             for loop_idx in range(self.n_loops):
-                t_loop_scalar = 1.0 - (loop_idx / denom)
-                c_loop = c + loop_emb_from_scalar(t_loop_scalar)
+                if self.use_loop_emb:
+                    t_loop_scalar = 1.0 - (loop_idx / denom)
+                    c_loop = c + loop_emb_from_scalar(t_loop_scalar)
+                else:
+                    c_loop = c
                 for block in self.shared_blocks.layers:
                     x = block(x, c_loop)
         
         # 3. Apply suffix blocks (independent)
         if self.n_suffix > 0:
-            # Use t_loop = 0.0 to denote the "late"/suffix phase (denoise-aligned)
-            c_suffix = c + loop_emb_from_scalar(0.0)
+            # Use t_loop = 0.0 to denote the "late"/suffix phase (denoise-aligned) if enabled
+            c_suffix = c + loop_emb_from_scalar(0.0) if self.use_loop_emb else c
             for block in self.suffix_blocks.layers:
                 x = block(x, c_suffix)
         

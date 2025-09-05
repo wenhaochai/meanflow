@@ -71,8 +71,11 @@ def setup_compilation_cache(config):
         n_shared = getattr(config.model, 'n_shared', 0) 
         n_loops = getattr(config.model, 'n_loops', 0)
         n_suffix = getattr(config.model, 'n_suffix', 0)
-        arch_suffix = f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}"
-        log_for_0(f"Looped model detected: {n_prefix} prefix + {n_shared} shared×{n_loops} loops + {n_suffix} suffix")
+        use_loop_emb = getattr(config.model, 'use_loop_emb', False)
+        arch_suffix = f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}_le{int(use_loop_emb)}"
+        log_for_0(
+            f"Looped model detected: {n_prefix} prefix + {n_shared} shared×{n_loops} loops + {n_suffix} suffix (loop_emb={use_loop_emb})"
+        )
     
     cache_dir = os.path.join(
         config.system.jax_compilation_cache_root, 
@@ -174,7 +177,8 @@ def get_cache_info(config):
         n_shared = getattr(config.model, 'n_shared', 0) 
         n_loops = getattr(config.model, 'n_loops', 0)
         n_suffix = getattr(config.model, 'n_suffix', 0)
-        arch_suffix = f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}"
+        use_loop_emb = getattr(config.model, 'use_loop_emb', True)
+        arch_suffix = f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}_le{int(use_loop_emb)}"
     
     cache_dir = os.path.join(
         config.system.jax_compilation_cache_root, 
