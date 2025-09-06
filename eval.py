@@ -121,7 +121,13 @@ def generate_results_summary(base_workdir, loop_list, results, base_cfg, config_
     else:
       summary_lines.append(f"Loop {loop_count:2d}: FID = ERROR/MISSING")
   
+  # Add detailed config contents at the end
   summary_lines.append("")
+  summary_lines.append("Configuration Details:")
+  summary_lines.append("-" * 30)
+  summary_lines.append("")
+  config_str = str(base_cfg)
+  summary_lines.append(config_str)
   summary_lines.append("=" * 60)
   
   # Print to console
@@ -146,7 +152,14 @@ def main(argv):
     raise app.UsageError('--config and --workdir are required')
 
   base_cfg = FLAGS.config
-  config_path = str(FLAGS.config) if FLAGS.config else 'N/A'
+  # Get the actual config file path from FLAGS
+  import sys
+  config_path = None
+  for arg in sys.argv:
+    if arg.startswith('--config='):
+      config_path = arg.split('=', 1)[1]
+      break
+  config_path = config_path or 'N/A'
 
   # Validate checkpoint
   if not hasattr(base_cfg, 'load_from') or base_cfg.load_from is None:

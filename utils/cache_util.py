@@ -72,9 +72,17 @@ def setup_compilation_cache(config):
         n_loops = getattr(config.model, 'n_loops', 0)
         n_suffix = getattr(config.model, 'n_suffix', 0)
         use_loop_emb = getattr(config.model, 'use_loop_emb', False)
-        arch_suffix = f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}_le{int(use_loop_emb)}"
+        # Input injection suffix
+        use_inject = getattr(config.model, 'use_input_injection', False)
+        inj_mode = getattr(config.model, 'input_injection_mode', 'none')
+        arch_suffix = (
+            f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}"
+            f"_le{int(use_loop_emb)}"
+            f"_inj{inj_mode}-{int(use_inject)}"
+        )
         log_for_0(
-            f"Looped model detected: {n_prefix} prefix + {n_shared} shared×{n_loops} loops + {n_suffix} suffix (loop_emb={use_loop_emb})"
+            f"Looped model detected: {n_prefix} prefix + {n_shared} shared×{n_loops} loops + {n_suffix} suffix "
+            f"(loop_emb={use_loop_emb}, inject={use_inject}, mode={inj_mode})"
         )
     
     cache_dir = os.path.join(
@@ -178,7 +186,13 @@ def get_cache_info(config):
         n_loops = getattr(config.model, 'n_loops', 0)
         n_suffix = getattr(config.model, 'n_suffix', 0)
         use_loop_emb = getattr(config.model, 'use_loop_emb', True)
-        arch_suffix = f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}_le{int(use_loop_emb)}"
+        use_inject = getattr(config.model, 'use_input_injection', False)
+        inj_mode = getattr(config.model, 'input_injection_mode', 'none')
+        arch_suffix = (
+            f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}"
+            f"_le{int(use_loop_emb)}"
+            f"_inj{inj_mode}-{int(use_inject)}"
+        )
     
     cache_dir = os.path.join(
         config.system.jax_compilation_cache_root, 

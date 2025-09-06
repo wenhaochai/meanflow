@@ -113,6 +113,11 @@ class MeanFlow(nn.Module):
       # Optional loop-step embedding toggle
       if 'use_loop_emb' in self.model_config:
         looped_params['use_loop_emb'] = self.model_config['use_loop_emb']
+      # Optional input injection controls
+      if 'use_input_injection' in self.model_config:
+        looped_params['use_input_injection'] = self.model_config['use_input_injection']
+      if 'input_injection_mode' in self.model_config:
+        looped_params['input_injection_mode'] = self.model_config['input_injection_mode']
       
       self.net = net_fn(name="net", class_dropout_prob=0.0, **looped_params)
     else:

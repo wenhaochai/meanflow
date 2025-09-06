@@ -5,12 +5,14 @@ model:
     n_shared: 2   # Number of shared blocks for looping  
     n_loops: 6    # Number of times to loop the shared blocks
     n_suffix: 0   # Number of suffix blocks (independent)
-    use_loop_emb: False
+    use_loop_emb: True
+    use_input_injection: True
+    input_injection_mode: 'add'
 
 training:
+    num_epochs: 240
     sample_on_training: False
-    sample_per_epoch: 10
-    fid_per_epoch: 1
+    fid_per_epoch: 10
 
 # Load checkpoints for eval or resuming training.
 # load_from: CKPT_PATH

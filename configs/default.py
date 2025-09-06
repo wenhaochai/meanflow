@@ -81,6 +81,8 @@ def get_config():
   model.n_loops = 4
   model.n_suffix = 0
   model.use_loop_emb = False  # Whether to use loop-step conditioning
+  model.use_input_injection = False # prefix output injected into each shared loop
+  model.input_injection_mode = 'add'  # 'add' or 'concat'
 
   # ------------------------------------------------------------
   # Sampling

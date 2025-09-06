@@ -46,6 +46,8 @@ class LoopedDiT(nn.Module):
     num_classes: int = 1000
     learn_sigma: bool = False
     use_loop_emb: bool = True  # Whether to use loop-step conditioning
+    use_input_injection: bool = True  # whether to inject prefix output into loops
+    input_injection_mode: str = 'add'
     
     def setup(self):
         self.out_channels = self.in_channels * 2 if self.learn_sigma else self.in_channels
@@ -100,6 +102,12 @@ class LoopedDiT(nn.Module):
         imgs = x.reshape((x.shape[0], h * p, h * p, c))
         return imgs
 
+    def loop_emb_from_scalar(self, loop_scalar, batch_size):
+        """Get loop-step embedding for the current batch"""
+        assert self.use_loop_emb, "loop_emb_from_scalar called but use_loop_emb is False"
+        s_vec = jnp.full((batch_size,), float(loop_scalar), dtype=jnp.float32)
+        return self.l_embedder(s_vec)
+
     def __call__(self, x, t, h, y, train=False, key=None):
         """
         Segmented looped forward pass - same interface as DiT.
@@ -123,19 +131,18 @@ class LoopedDiT(nn.Module):
         y = self.y_embedder(y, train=train, rng=key)
         c = t + h + y  # base condition
 
-        # Small helper to embed a scalar t_loop ∈ [0, 1] for the whole batch (only if loop_emb enabled)
-        bsz = x.shape[0]
-        if self.use_loop_emb:
-            def loop_emb_from_scalar(scalar):
-                s_vec = jnp.full((bsz,), float(scalar), dtype=jnp.float32)
-                return self.l_embedder(s_vec)
+        batch_size = x.shape[0]
+        x_prefix = x
 
         # 1. Apply prefix blocks (independent)
         if self.n_prefix > 0:
             # Use t_loop = 1.0 to denote the "early"/prefix phase (denoise-aligned) if enabled
-            c_prefix = c + loop_emb_from_scalar(1.0) if self.use_loop_emb else c
+            c_prefix = c + self.loop_emb_from_scalar(1.0, batch_size) if self.use_loop_emb else c
             for block in self.prefix_blocks.layers:
                 x = block(x, c_prefix)
+            # Cache prefix output for optional loop-time injection
+            if self.use_input_injection:
+                x_prefix = x
         
         # 2. Apply shared blocks in loops 
         if self.n_shared > 0 and self.n_loops > 0:
@@ -144,9 +151,17 @@ class LoopedDiT(nn.Module):
             if self.use_loop_emb:
                 denom = max(self.n_loops - 1, 1)
             for loop_idx in range(self.n_loops):
+                # inject prefix output at the start of each loop iteration
+                if self.use_input_injection and x_prefix is not None:
+                    if self.input_injection_mode == 'add':
+                        x = x + x_prefix
+                    elif self.input_injection_mode == 'concat':
+                        pass
+                    else:
+                        pass
                 if self.use_loop_emb:
                     t_loop_scalar = 1.0 - (loop_idx / denom)
-                    c_loop = c + loop_emb_from_scalar(t_loop_scalar)
+                    c_loop = c + self.loop_emb_from_scalar(t_loop_scalar, batch_size)
                 else:
                     c_loop = c
                 for block in self.shared_blocks.layers:
@@ -155,7 +170,7 @@ class LoopedDiT(nn.Module):
         # 3. Apply suffix blocks (independent)
         if self.n_suffix > 0:
             # Use t_loop = 0.0 to denote the "late"/suffix phase (denoise-aligned) if enabled
-            c_suffix = c + loop_emb_from_scalar(0.0) if self.use_loop_emb else c
+            c_suffix = c + self.loop_emb_from_scalar(0.0, batch_size) if self.use_loop_emb else c
             for block in self.suffix_blocks.layers:
                 x = block(x, c_suffix)
         
@@ -188,23 +203,58 @@ LoopedDiT_models = {
 
 if __name__ == '__main__':
     import jax
-    # Test the looped model
-    model = LoopedDiT_S_4(num_classes=1000)
-    variables = model.init(random.PRNGKey(0), 
-                          jnp.ones((2, 32, 32, 4)), 
-                          jnp.ones((2,)), 
-                          jnp.ones((2,)), 
-                          jnp.ones((2,), dtype=jnp.int32))
     
+    # Test data
     x = np.random.randn(2, 32, 32, 4).astype(np.float32)
     t = np.random.randint(0, 1000, (2,)).astype(np.float32)
     h = np.random.randint(0, 1000, (2,)).astype(np.float32)
     y = np.random.randint(0, 1000, (2,)).astype(np.int32)
-
-    out = model.apply(variables, x, t, h, y=y, train=True, key=random.PRNGKey(0))
-    print(f"Output range: [{out.min():.6f}, {out.max():.6f}]")
-    print(f"Output shape: {out.shape}")
     
-    # Compare parameter count
-    param_count = sum(x.size for x in jax.tree.leaves(variables['params']))
-    print(f"LoopedDiT-S/4 parameter count: {param_count:,}")
+    # Test loop_emb=False (default)
+    print("=== Testing LoopedDiT with loop_emb=False ===")
+    model_no_emb = LoopedDiT_S_4(num_classes=1000, use_loop_emb=False)
+    variables_no_emb = model_no_emb.init(random.PRNGKey(0), 
+                                        jnp.ones((2, 32, 32, 4)), 
+                                        jnp.ones((2,)), 
+                                        jnp.ones((2,)), 
+                                        jnp.ones((2,), dtype=jnp.int32))
+    
+    out_no_emb = model_no_emb.apply(variables_no_emb, x, t, h, y=y, train=True, key=random.PRNGKey(0))
+    param_count_no_emb = sum(x.size for x in jax.tree.leaves(variables_no_emb['params']))
+    print(f"Output shape: {out_no_emb.shape}")
+    print(f"Parameter count (loop_emb=False): {param_count_no_emb:,}")
+    
+    # Test loop_emb=True
+    print("\n=== Testing LoopedDiT with loop_emb=True ===")
+    model_with_emb = LoopedDiT_S_4(num_classes=1000, use_loop_emb=True)
+    variables_with_emb = model_with_emb.init(random.PRNGKey(0), 
+                                           jnp.ones((2, 32, 32, 4)), 
+                                           jnp.ones((2,)), 
+                                           jnp.ones((2,)), 
+                                           jnp.ones((2,), dtype=jnp.int32))
+    
+    out_with_emb = model_with_emb.apply(variables_with_emb, x, t, h, y=y, train=True, key=random.PRNGKey(0))
+    param_count_with_emb = sum(x.size for x in jax.tree.leaves(variables_with_emb['params']))
+    print(f"Output shape: {out_with_emb.shape}")
+    print(f"Parameter count (loop_emb=True): {param_count_with_emb:,}")
+    
+    # Compare outputs
+    print(f"\n=== Comparison ===")
+    print(f"Output difference (L2 norm): {jnp.linalg.norm(out_with_emb - out_no_emb):.6f}")
+    print(f"Parameter count difference: {param_count_with_emb - param_count_no_emb:,}")
+    print(f"Same parameter count: {param_count_with_emb == param_count_no_emb}")
+
+    # Test input injection with add mode
+    print("\n=== Testing input injection (add) ===")
+    model_inj_add = LoopedDiT_S_4(num_classes=1000,
+                                  use_loop_emb=False,  # isolate injection effect
+                                  use_input_injection=True,
+                                  input_injection_mode='add')
+    variables_inj_add = model_inj_add.init(random.PRNGKey(1), 
+                                           jnp.ones((2, 32, 32, 4)), 
+                                           jnp.ones((2,)), 
+                                           jnp.ones((2,)), 
+                                           jnp.ones((2,), dtype=jnp.int32))
+
+    out_inj_add = model_inj_add.apply(variables_inj_add, x, t, h, y=y, train=True, key=random.PRNGKey(1))
+    print(f"Output shape (inj add): {out_inj_add.shape}")
