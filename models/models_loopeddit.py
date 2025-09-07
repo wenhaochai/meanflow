@@ -12,6 +12,7 @@ from models.models_dit import (
     DiTBlock, TimestepEmbedder, LabelEmbedder, FinalLayer, 
     get_2d_sincos_pos_embed, DiT  # Import DiT for unpatchify method
 )
+from models.torch_models import TorchLinear
 from models.timm_models import PatchEmbed
 
 class LoopedDiT(nn.Module):
@@ -90,6 +91,17 @@ class LoopedDiT(nn.Module):
         # Reuse final layer
         self.final_layer = FinalLayer(self.hidden_size, self.patch_size, self.out_channels)
 
+        # Input injection (concat) projection back to hidden_size
+        if self.use_input_injection and self.input_injection_mode == 'concat':
+            # Concatenate current tokens and prefix tokens along channel dim (D+D) -> project to D
+            self.inj_proj = TorchLinear(
+                self.hidden_size * 2,
+                self.hidden_size,
+                bias=True,
+                weight_init='xavier_uniform',
+                bias_init='zeros',
+            )
+
     def unpatchify(self, x):
         """Reuse unpatchify logic from DiT"""
         c = self.out_channels
@@ -132,7 +144,7 @@ class LoopedDiT(nn.Module):
         c = t + h + y  # base condition
 
         batch_size = x.shape[0]
-        x_prefix = x
+        e = x # input injection
 
         # 1. Apply prefix blocks (independent)
         if self.n_prefix > 0:
@@ -140,9 +152,11 @@ class LoopedDiT(nn.Module):
             c_prefix = c + self.loop_emb_from_scalar(1.0, batch_size) if self.use_loop_emb else c
             for block in self.prefix_blocks.layers:
                 x = block(x, c_prefix)
-            # Cache prefix output for optional loop-time injection
+            # update input injection
             if self.use_input_injection:
-                x_prefix = x
+                e = x
+        
+        # set start point for loop-time injection
         
         # 2. Apply shared blocks in loops 
         if self.n_shared > 0 and self.n_loops > 0:
@@ -152,11 +166,13 @@ class LoopedDiT(nn.Module):
                 denom = max(self.n_loops - 1, 1)
             for loop_idx in range(self.n_loops):
                 # inject prefix output at the start of each loop iteration
-                if self.use_input_injection and x_prefix is not None:
+                if self.use_input_injection and e is not None:
                     if self.input_injection_mode == 'add':
-                        x = x + x_prefix
+                        x = x + e
                     elif self.input_injection_mode == 'concat':
-                        pass
+                        # (B, T, D) || (B, T, D) -> (B, T, 2D) -> project back to D, then residual
+                        z = jnp.concatenate([x, e], axis=-1)
+                        x = x + self.inj_proj(z)
                     else:
                         pass
                 if self.use_loop_emb:
@@ -200,61 +216,3 @@ LoopedDiT_models = {
     'LoopedDiT-B/2':  LoopedDiT_B_2,   'LoopedDiT-B/4':  LoopedDiT_B_4,   'LoopedDiT-B/8':  LoopedDiT_B_8,
     'LoopedDiT-S/2':  LoopedDiT_S_2,   'LoopedDiT-S/4':  LoopedDiT_S_4,   'LoopedDiT-S/8':  LoopedDiT_S_8,
 }
-
-if __name__ == '__main__':
-    import jax
-    
-    # Test data
-    x = np.random.randn(2, 32, 32, 4).astype(np.float32)
-    t = np.random.randint(0, 1000, (2,)).astype(np.float32)
-    h = np.random.randint(0, 1000, (2,)).astype(np.float32)
-    y = np.random.randint(0, 1000, (2,)).astype(np.int32)
-    
-    # Test loop_emb=False (default)
-    print("=== Testing LoopedDiT with loop_emb=False ===")
-    model_no_emb = LoopedDiT_S_4(num_classes=1000, use_loop_emb=False)
-    variables_no_emb = model_no_emb.init(random.PRNGKey(0), 
-                                        jnp.ones((2, 32, 32, 4)), 
-                                        jnp.ones((2,)), 
-                                        jnp.ones((2,)), 
-                                        jnp.ones((2,), dtype=jnp.int32))
-    
-    out_no_emb = model_no_emb.apply(variables_no_emb, x, t, h, y=y, train=True, key=random.PRNGKey(0))
-    param_count_no_emb = sum(x.size for x in jax.tree.leaves(variables_no_emb['params']))
-    print(f"Output shape: {out_no_emb.shape}")
-    print(f"Parameter count (loop_emb=False): {param_count_no_emb:,}")
-    
-    # Test loop_emb=True
-    print("\n=== Testing LoopedDiT with loop_emb=True ===")
-    model_with_emb = LoopedDiT_S_4(num_classes=1000, use_loop_emb=True)
-    variables_with_emb = model_with_emb.init(random.PRNGKey(0), 
-                                           jnp.ones((2, 32, 32, 4)), 
-                                           jnp.ones((2,)), 
-                                           jnp.ones((2,)), 
-                                           jnp.ones((2,), dtype=jnp.int32))
-    
-    out_with_emb = model_with_emb.apply(variables_with_emb, x, t, h, y=y, train=True, key=random.PRNGKey(0))
-    param_count_with_emb = sum(x.size for x in jax.tree.leaves(variables_with_emb['params']))
-    print(f"Output shape: {out_with_emb.shape}")
-    print(f"Parameter count (loop_emb=True): {param_count_with_emb:,}")
-    
-    # Compare outputs
-    print(f"\n=== Comparison ===")
-    print(f"Output difference (L2 norm): {jnp.linalg.norm(out_with_emb - out_no_emb):.6f}")
-    print(f"Parameter count difference: {param_count_with_emb - param_count_no_emb:,}")
-    print(f"Same parameter count: {param_count_with_emb == param_count_no_emb}")
-
-    # Test input injection with add mode
-    print("\n=== Testing input injection (add) ===")
-    model_inj_add = LoopedDiT_S_4(num_classes=1000,
-                                  use_loop_emb=False,  # isolate injection effect
-                                  use_input_injection=True,
-                                  input_injection_mode='add')
-    variables_inj_add = model_inj_add.init(random.PRNGKey(1), 
-                                           jnp.ones((2, 32, 32, 4)), 
-                                           jnp.ones((2,)), 
-                                           jnp.ones((2,)), 
-                                           jnp.ones((2,), dtype=jnp.int32))
-
-    out_inj_add = model_inj_add.apply(variables_inj_add, x, t, h, y=y, train=True, key=random.PRNGKey(1))
-    print(f"Output shape (inj add): {out_inj_add.shape}")
