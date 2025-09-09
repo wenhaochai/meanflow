@@ -100,26 +100,7 @@ class MeanFlow(nn.Module):
       self.net = net_fn(name="net", class_dropout_prob=0.0)
     elif hasattr(models_loopeddit, model_str):
       net_fn = getattr(models_loopeddit, model_str)
-      # LoopedDiT models - pass looping architecture parameters from config
-      looped_params = {}
-      if 'n_prefix' in self.model_config:
-        looped_params['n_prefix'] = self.model_config['n_prefix']
-      if 'n_shared' in self.model_config:
-        looped_params['n_shared'] = self.model_config['n_shared']
-      if 'n_loops' in self.model_config:
-        looped_params['n_loops'] = self.model_config['n_loops']
-      if 'n_suffix' in self.model_config:
-        looped_params['n_suffix'] = self.model_config['n_suffix']
-      # Optional loop-step embedding toggle
-      if 'use_loop_emb' in self.model_config:
-        looped_params['use_loop_emb'] = self.model_config['use_loop_emb']
-      # Optional input injection controls
-      if 'use_input_injection' in self.model_config:
-        looped_params['use_input_injection'] = self.model_config['use_input_injection']
-      if 'input_injection_mode' in self.model_config:
-        looped_params['input_injection_mode'] = self.model_config['input_injection_mode']
-      
-      self.net = net_fn(name="net", class_dropout_prob=0.0, **looped_params)
+      self.net = net_fn(name="net", class_dropout_prob=0.0, **self.model_config)
     else:
       raise ValueError(f"Model '{model_str}' not found in models_dit or models_loopeddit")
 

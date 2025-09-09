@@ -83,6 +83,8 @@ def get_config():
   model.use_loop_emb = False  # Whether to use loop-step conditioning
   model.use_input_injection = False # prefix output injected into each shared loop
   model.input_injection_mode = 'add'  # 'add' or 'concat'
+  model.use_noise_init = False # Whether to use noise initialization
+  model.noise_std = 0.0 # Noise std for noise initialization
 
   # ------------------------------------------------------------
   # Sampling
@@ -105,7 +107,7 @@ def get_config():
   # ------------------------------------------------------------
   # WandB (Weights & Biases) Configuration
   config.wandb = wandb = ml_collections.ConfigDict()
-  wandb.enable = True                    # Enable/disable wandb logging
+  wandb.enable = False                    # Enable/disable wandb logging
   wandb.root = '/path/to/work/project/meanflow'
   wandb.project = 'meanflow'             # WandB project name
   wandb.entity = 'reself'                # WandB entity (username/team), None for default
