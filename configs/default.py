@@ -32,7 +32,7 @@ def get_config():
   training.learning_rate = 0.0001
   training.batch_size = 256
 
-  training.num_epochs = 240
+  training.num_epochs = 80
   training.log_per_step = 100
   training.sample_on_training = False
   training.sample_per_epoch = 10
