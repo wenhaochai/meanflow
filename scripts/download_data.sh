@@ -1,0 +1,1 @@
+hf download wchai/imagenet_train_256_sd-vae-ft-mse-flax --local-dir /n/fs/vision-mix/user/data/imagenet/imagenet_train_256_sd-vae-ft-mse-flax --repo-type dataset
