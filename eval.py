@@ -108,16 +108,11 @@ def generate_results_summary(base_workdir, loop_list, results, base_cfg, config_
   # Sort results by loop count for better readability
   sorted_results = sorted(results.items())
   
-  # Find best result
-  valid_results = [(loop, fid) for loop, fid in sorted_results if fid is not None]
-  best_loop, best_fid = min(valid_results, key=lambda x: x[1])
-  
   summary_lines.append("Detailed Results:")
   summary_lines.append("-" * 30)
   for loop_count, fid_score in sorted_results:
     if fid_score is not None:
-      status = " ⭐ BEST" if valid_results and (loop_count, fid_score) == (best_loop, best_fid) else ""
-      summary_lines.append(f"Loop {loop_count:2d}: FID = {fid_score:7.3f}{status}")
+      summary_lines.append(f"Loop {loop_count:2d}: FID = {fid_score:7.3f}")
     else:
       summary_lines.append(f"Loop {loop_count:2d}: FID = ERROR/MISSING")
   

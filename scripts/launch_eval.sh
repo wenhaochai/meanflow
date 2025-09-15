@@ -6,7 +6,7 @@
 # Note: Loop counts should be specified in config file under evaluation.loop_list
 
 # suggest use absolute path
-export LOG_DIR="/path/to/work/project/meanflow/eval_log"
+export LOG_DIR="/path/to/work/project/meanflow/log_eval"
 
 MODEL_CONFIG=${1:-loopb4p0s2l6e0}
 JOB_NAME=${2:-eval_${MODEL_CONFIG}}
