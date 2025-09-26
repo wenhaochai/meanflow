@@ -72,17 +72,13 @@ def setup_compilation_cache(config):
         n_loops = getattr(config.model, 'n_loops', 0)
         n_suffix = getattr(config.model, 'n_suffix', 0)
         use_loop_emb = getattr(config.model, 'use_loop_emb', False)
-        # Input injection suffix
-        use_inject = getattr(config.model, 'use_input_injection', False)
-        inj_mode = getattr(config.model, 'input_injection_mode', 'none')
         arch_suffix = (
             f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}"
             f"_le{int(use_loop_emb)}"
-            f"_inj{inj_mode}-{int(use_inject)}"
         )
         log_for_0(
             f"Looped model detected: {n_prefix} prefix + {n_shared} shared×{n_loops} loops + {n_suffix} suffix "
-            f"(loop_emb={use_loop_emb}, inject={use_inject}, mode={inj_mode})"
+            f"(loop_emb={use_loop_emb})"
         )
     
     cache_dir = os.path.join(
@@ -120,26 +116,6 @@ def setup_compilation_cache(config):
         log_for_0(f'  Current cache: {cache_stats["total_size_mb"]:.1f}MB, {cache_stats["num_files"]} files')
     
     return cache_dir, cache_stats
-
-
-def log_cache_to_wandb(cache_stats):
-    """Log cache statistics to WandB if available.
-    
-    Args:
-        cache_stats (dict): Cache statistics from get_cache_stats()
-    """
-    if cache_stats is None:
-        return
-        
-    if WANDB_AVAILABLE and wandb.run is not None and jax.process_index() == 0:
-        try:
-            wandb.log({
-                'cache/size_mb': cache_stats['total_size_mb'],
-                'cache/num_files': cache_stats['num_files'],
-            }, commit=False)
-        except Exception as e:
-            log_for_0(f"Warning: Failed to log cache stats to WandB: {e}")
-
 
 def clear_cache(cache_dir):
     """Clear compilation cache directory.
@@ -186,12 +162,9 @@ def get_cache_info(config):
         n_loops = getattr(config.model, 'n_loops', 0)
         n_suffix = getattr(config.model, 'n_suffix', 0)
         use_loop_emb = getattr(config.model, 'use_loop_emb', True)
-        use_inject = getattr(config.model, 'use_input_injection', False)
-        inj_mode = getattr(config.model, 'input_injection_mode', 'none')
         arch_suffix = (
             f"_p{n_prefix}s{n_shared}l{n_loops}e{n_suffix}"
             f"_le{int(use_loop_emb)}"
-            f"_inj{inj_mode}-{int(use_inject)}"
         )
     
     cache_dir = os.path.join(

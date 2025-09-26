@@ -1,12 +1,14 @@
 import jax
+import os
 from flax.training import checkpoints
 
 from utils.logging_util import log_for_0
 
 
 def restore_checkpoint(state, workdir):
+  if not os.path.exists(workdir):
+    raise FileNotFoundError(f'Checkpoint not found: {workdir}')
   state = checkpoints.restore_checkpoint(workdir, state)
-  log_for_0('Restored from checkpoint at {}'.format(workdir))
   return state
 
 

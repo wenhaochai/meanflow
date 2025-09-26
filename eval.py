@@ -51,8 +51,6 @@ def _prepare_eval_config(base_cfg, n_loops):
   cfg.eval_only = True
   if hasattr(cfg, 'fid') and hasattr(cfg.fid, 'on_training'):
     cfg.fid.on_training = True
-  # Set loop count for LoopedDiT
-  cfg.model.n_loops = int(n_loops)
   # Mark WandB job type and add a tag for clarity (best-effort)
   if hasattr(cfg, 'wandb'):
     try:
@@ -62,6 +60,13 @@ def _prepare_eval_config(base_cfg, n_loops):
       cfg.wandb.tags = tags
     except Exception:
       pass
+    
+  # Set loop count for LoopedDiT
+  cfg.model.n_loops = int(n_loops)
+  # TODO: NOT HARD CODE loop_emb_max and loop_emb_min here
+  cfg.model.loop_emb_max = 1.0
+  cfg.model.loop_emb_min = 0.0
+  
   return cfg
 
 
@@ -104,13 +109,11 @@ def generate_results_summary(base_workdir, loop_list, results, base_cfg, config_
   summary_lines.append(f"Config Path:     {config_path or 'N/A'}")
   summary_lines.append(f"Checkpoint Path: {getattr(base_cfg, 'load_from', 'N/A')}")
   summary_lines.append("")
-  
-  # Sort results by loop count for better readability
-  sorted_results = sorted(results.items())
+
   
   summary_lines.append("Detailed Results:")
   summary_lines.append("-" * 30)
-  for loop_count, fid_score in sorted_results:
+  for loop_count, fid_score in results.items():
     if fid_score is not None:
       summary_lines.append(f"Loop {loop_count:2d}: FID = {fid_score:7.3f}")
     else:
@@ -185,6 +188,7 @@ def main(argv):
     # Extract FID result after evaluation
     fid_score = extract_fid_from_logs(loop_workdir)
     results[n_loops] = fid_score
+    print(f'Loop {n_loops}: FID = {fid_score}')
 
   # Generate comprehensive results summary
   generate_results_summary(base_workdir, loop_list, results, base_cfg, config_path)

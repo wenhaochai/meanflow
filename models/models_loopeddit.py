@@ -47,10 +47,10 @@ class LoopedDiT(nn.Module):
     num_classes: int = 1000
     learn_sigma: bool = False
     use_loop_emb: bool = True  # Whether to use loop-step conditioning
-    use_input_injection: bool = True  # whether to inject prefix output into loops
-    input_injection_mode: str = 'add' # 'add' or 'concat'
-    use_noise_init: bool = True # random initial latent state for the looped recurrence
-    noise_std: float = 1.0
+    loop_emb_max: float = 1.0  # Maximum loop embedding value (first loop)
+    loop_emb_min: float = 0.0  # Minimum loop embedding value (last loop)
+    dropout_prob: float = 0.1
+    
     
     def setup(self):
         self.out_channels = self.in_channels * 2 if self.learn_sigma else self.in_channels
@@ -93,16 +93,6 @@ class LoopedDiT(nn.Module):
         # Reuse final layer
         self.final_layer = FinalLayer(self.hidden_size, self.patch_size, self.out_channels)
 
-        # Input injection (concat) projection back to hidden_size
-        if self.use_input_injection and self.input_injection_mode == 'concat':
-            # Concatenate current tokens and prefix tokens along channel dim (D+D) -> project to D
-            self.inj_proj = TorchLinear(
-                self.hidden_size * 2,
-                self.hidden_size,
-                bias=True,
-                weight_init='xavier_uniform',
-                bias_init='zeros',
-            )
 
     def unpatchify(self, x):
         """Reuse unpatchify logic from DiT"""
@@ -138,15 +128,6 @@ class LoopedDiT(nn.Module):
         - Stage/iteration condition: c_stage = c + l_emb(t_loop)
           where t_loop encodes the current stage: prefix=1.0, loops∈[1,0], suffix=0.0
         """
-        if self.use_noise_init:
-            # noise init only used with input injection
-            assert self.use_input_injection, "use_noise_init only used with input injection"
-            # Split RNG for label dropout and noise initialization to avoid reusing the same key twice
-            if key is not None:
-                key, key_noise_init = random.split(key)
-            else:
-                # this branch just use for model init once
-                key, key_noise_init = None, random.PRNGKey(0)
         
         # Same initial processing as original DiT
         x = self.x_embedder(x) + self.pos_embed_func()
@@ -156,52 +137,38 @@ class LoopedDiT(nn.Module):
         c = t + h + y  # base condition
 
         batch_size = x.shape[0]
-        e = x # input injection
 
         # 1. Apply prefix blocks (independent)
         if self.n_prefix > 0:
-            # Use t_loop = 1.0 to denote the "early"/prefix phase (denoise-aligned) if enabled
-            c_prefix = c + self.loop_emb_from_scalar(1.0, batch_size) if self.use_loop_emb else c
+            c_prefix = c
             for block in self.prefix_blocks.layers:
                 x = block(x, c_prefix)
-            # update input injection
-            if self.use_input_injection:
-                e = x
-        
-        # 2. Apply shared blocks in loops 
+                
+        # 2. Apply shared blocks in loops
         if self.n_shared > 0 and self.n_loops > 0:
-            # Linearly sweep t_loop ∈ [1, 0] across loop iterations (only if loop_emb enabled).
-            # When n_loops==1, we set t_loop=1.0.
+            # Linearly sweep t_loop ∈ [loop_emb_max, loop_emb_min] across loop iterations (only if loop_emb enabled).
+            # When n_loops==1, we set t_loop=loop_emb_max.
             if self.use_loop_emb:
-                denom = max(self.n_loops - 1, 1)
-            # Initialize recurrent state
-            if self.use_noise_init:
-                noise = random.normal(key_noise_init, x.shape, dtype=x.dtype) * float(self.noise_std)
-                x = noise
-            
+                denom = max(self.n_loops - 1, 1) # keep original n_loops to control the loop-embedding range
             for loop_idx in range(self.n_loops):
-                # inject prefix output at the start of each loop iteration
-                if self.use_input_injection and e is not None:
-                    if self.input_injection_mode == 'add':
-                        x = x + e
-                    elif self.input_injection_mode == 'concat':
-                        # (B, T, D) || (B, T, D) -> (B, T, 2D) -> project back to D, then residual
-                        z = jnp.concatenate([x, e], axis=-1)
-                        x = x + self.inj_proj(z)
-                    else:
-                        raise ValueError(f"Unknown input injection mode: {self.input_injection_mode}")
                 if self.use_loop_emb:
-                    t_loop_scalar = 1.0 - (loop_idx / denom)
+                    range_span = self.loop_emb_max - self.loop_emb_min
+                    t_loop_scalar = self.loop_emb_max - (loop_idx / denom) * range_span
                     c_loop = c + self.loop_emb_from_scalar(t_loop_scalar, batch_size)
                 else:
                     c_loop = c
                 for block in self.shared_blocks.layers:
                     x = block(x, c_loop)
-        
+                
+                # random early exit
+                if train:
+                    import random as py_random
+                    if py_random.random() < self.dropout_prob:
+                        break
+                
         # 3. Apply suffix blocks (independent)
         if self.n_suffix > 0:
-            # Use t_loop = 0.0 to denote the "late"/suffix phase (denoise-aligned) if enabled
-            c_suffix = c + self.loop_emb_from_scalar(0.0, batch_size) if self.use_loop_emb else c
+            c_suffix = c
             for block in self.suffix_blocks.layers:
                 x = block(x, c_suffix)
         

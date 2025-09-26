@@ -59,7 +59,7 @@ class LatentManager:
                 return_dict[k] = v
             return return_dict
         
-        log_for_0('Compiling vae.apply...')
+        # log_for_0('Compiling vae.apply...')
 
         z_dummy = jnp.ones((jax.local_device_count(), self.batch_size, 4, self.latent_size, self.latent_size))
         
@@ -71,8 +71,8 @@ class LatentManager:
         compiled_decod_fn = lowered.compile()
         costs = compiled_decod_fn.cost_analysis()
         Bflops = costs.get('flops', 0.0) / 1e9        
-        log_for_0('Compiling VAE decoder done')
-        log_for_0(f'FLOPs (1e9): {Bflops}')
+        # log_for_0('Compiling VAE decoder done')
+        # log_for_0(f'FLOPs (1e9): {Bflops}')
   
         def call_p_compiled_model_fn(x, p_func, var):
             x = dist_prepare_batch_data(dict(x=x))['x']
@@ -110,7 +110,6 @@ class LatentDataset(torch.utils.data.Dataset):
         
         log_for_0(f"Loading entire dataset from merged file: {merged_file}")
         log_for_0(f"File size: {os.path.getsize(merged_file) / (1024**3):.1f}GB")
-        log_for_0("This may take 1-2 minutes, please wait...")
         
         load_start = time.time()
         self.data = torch.load(merged_file, map_location='cpu')
@@ -119,9 +118,6 @@ class LatentDataset(torch.utils.data.Dataset):
         self.images = self.data['images']
         self.labels = self.data['labels']
         self.total_samples = len(self.images)
-        
-        log_for_0(f"Loaded {self.total_samples:,} samples into memory in {load_time:.1f}s")
-        log_for_0(f"Memory usage: ~{self.total_samples * 4 * 32 * 32 / (1024**3):.1f}GB")
 
     def __len__(self):
         return self.total_samples

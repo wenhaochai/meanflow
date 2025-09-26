@@ -21,19 +21,13 @@ compute_fid = compute_frechet_distance
 
 
 def build_jax_inception(batch_size=200):
-    # jax model
-    logging.info("Initializing InceptionV3")
     model = inception.InceptionV3(pretrained=True)
     inception_params = model.init(jax.random.PRNGKey(0), jnp.ones((1, 16, 16, 3)))
-    logging.info("Initialized InceptionV3")
     inception_fn = jax.jit(functools.partial(model.apply, train=False))
 
     fake_x = np.zeros((batch_size, 299, 299, 3), dtype=np.float32)
     lowered = inception_fn.lower(inception_params, jax.lax.stop_gradient(fake_x))
-    logging.info('Start compiling inception_fn...')
-    t_start = time.time()
     compiled = lowered.compile()
-    logging.info(f'End compiling: {(time.time() - t_start):.4f} seconds.')
     inception_fn = compiled
 
     inception_net = {"params": inception_params, "fn": inception_fn}
@@ -44,8 +38,6 @@ def get_reference(cache_path, inception_net=None, batch_size=200, num_samples=50
     # Load ref_mu and ref_sigma from npz file
     assert os.path.exists(cache_path), f"Cache file must exist: {cache_path}"
     
-    logging.info(f"Loading ref_mu and ref_sigma from {cache_path}")
-    os.system('md5sum ' + cache_path)
     with np.load(cache_path) as data:
         if "ref_mu" in data:
             ref_mu, ref_sigma = data["ref_mu"], data["ref_sigma"]
@@ -60,7 +52,7 @@ def compute_stats(
     samples,
     inception_net,
     batch_size=200,
-    num_workers=12,
+    num_workers=8,
     fid_samples=50000,
     mode = "legacy_tensorflow"
 ):
