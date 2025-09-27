@@ -49,7 +49,7 @@ class LoopedDiT(nn.Module):
     use_loop_emb: bool = True  # Whether to use loop-step conditioning
     loop_emb_max: float = 1.0  # Maximum loop embedding value (first loop)
     loop_emb_min: float = 0.0  # Minimum loop embedding value (last loop)
-    dropout_prob: float = 0.1
+    dropout_prob: float = 0.0
     
     
     def setup(self):
@@ -161,7 +161,7 @@ class LoopedDiT(nn.Module):
                     x = block(x, c_loop)
                 
                 # random early exit
-                if train:
+                if train and self.dropout_prob > 0:
                     import random as py_random
                     if py_random.random() < self.dropout_prob:
                         break
