@@ -37,19 +37,17 @@ class LoopedDiT(nn.Module):
     patch_size: int = 2
     in_channels: int = 4
     hidden_size: int = 768
-    n_prefix: int = 3        # Number of prefix blocks (independent)
-    n_shared: int = 3        # Number of shared blocks for looping
-    n_loops: int = 2         # Number of times to loop the shared blocks
-    n_suffix: int = 3        # Number of suffix blocks (independent)
+    n_prefix: int = 5        # Number of prefix blocks (independent)
+    n_shared: int = 2        # Number of shared blocks for looping
+    n_loops: int = 6         # Number of times to loop the shared blocks
+    n_suffix: int = 5        # Number of suffix blocks (independent)
     num_heads: int = 12
     mlp_ratio: float = 4.0
     class_dropout_prob: float = 0.1
     num_classes: int = 1000
     learn_sigma: bool = False
-    use_loop_emb: bool = True  # Whether to use loop-step conditioning
     loop_emb_max: float = 1.0  # Maximum loop embedding value (first loop)
     loop_emb_min: float = 0.0  # Minimum loop embedding value (last loop)
-    dropout_prob: float = 0.0
     
     
     def setup(self):
@@ -62,8 +60,7 @@ class LoopedDiT(nn.Module):
         # Loop-step embedder for per-iteration conditioning (t_loop) - only if enabled
         # Note: we re-use the same embedding machinery (sinusoidal + small MLP)
         # to keep scales compatible with other condition signals.
-        if self.use_loop_emb:
-            self.l_embedder = TimestepEmbedder(self.hidden_size)
+        self.l_embedder = TimestepEmbedder(self.hidden_size)
         self.y_embedder = LabelEmbedder(self.num_classes, self.hidden_size, self.class_dropout_prob)
         
         num_patches = self.x_embedder.num_patches
@@ -106,11 +103,15 @@ class LoopedDiT(nn.Module):
         imgs = x.reshape((x.shape[0], h * p, h * p, c))
         return imgs
 
-    def loop_emb_from_scalar(self, loop_scalar, batch_size):
-        """Get loop-step embedding for the current batch"""
-        assert self.use_loop_emb, "loop_emb_from_scalar called but use_loop_emb is False"
-        s_vec = jnp.full((batch_size,), float(loop_scalar), dtype=jnp.float32)
-        return self.l_embedder(s_vec)
+    def get_loop_emb(self, loop_idx, batch_size):
+        """Return base condition adjusted with loop-step embedding for this iteration."""
+        # Linearly sweep t_loop ∈ [loop_emb_max, loop_emb_min] across loop iterations (only if loop_emb enabled).
+        # When n_loops==1, we set t_loop=loop_emb_max.
+        denom = max(self.n_loops - 1, 1) # keep original n_loops to control the loop-embedding range
+        range_span = self.loop_emb_max - self.loop_emb_min
+        t_loop_scalar = self.loop_emb_max - (loop_idx / denom) * range_span
+        loop_scalar_vec = jnp.full((batch_size,), float(t_loop_scalar), dtype=jnp.float32)
+        return self.l_embedder(loop_scalar_vec)
 
     def __call__(self, x, t, h, y, train=False, key=None):
         """
@@ -126,7 +127,6 @@ class LoopedDiT(nn.Module):
         Conditioning
         - Base condition: c = t_emb + h_emb + y_emb
         - Stage/iteration condition: c_stage = c + l_emb(t_loop)
-          where t_loop encodes the current stage: prefix=1.0, loops∈[1,0], suffix=0.0
         """
         
         # Same initial processing as original DiT
@@ -140,37 +140,19 @@ class LoopedDiT(nn.Module):
 
         # 1. Apply prefix blocks (independent)
         if self.n_prefix > 0:
-            c_prefix = c
             for block in self.prefix_blocks.layers:
-                x = block(x, c_prefix)
+                x = block(x, c)
                 
         # 2. Apply shared blocks in loops
-        if self.n_shared > 0 and self.n_loops > 0:
-            # Linearly sweep t_loop ∈ [loop_emb_max, loop_emb_min] across loop iterations (only if loop_emb enabled).
-            # When n_loops==1, we set t_loop=loop_emb_max.
-            if self.use_loop_emb:
-                denom = max(self.n_loops - 1, 1) # keep original n_loops to control the loop-embedding range
+        if self.n_shared > 0:
             for loop_idx in range(self.n_loops):
-                if self.use_loop_emb:
-                    range_span = self.loop_emb_max - self.loop_emb_min
-                    t_loop_scalar = self.loop_emb_max - (loop_idx / denom) * range_span
-                    c_loop = c + self.loop_emb_from_scalar(t_loop_scalar, batch_size)
-                else:
-                    c_loop = c
                 for block in self.shared_blocks.layers:
-                    x = block(x, c_loop)
-                
-                # random early exit
-                if train and self.dropout_prob > 0:
-                    import random as py_random
-                    if py_random.random() < self.dropout_prob:
-                        break
+                    x = block(x, c + self.get_loop_emb(loop_idx, batch_size))
                 
         # 3. Apply suffix blocks (independent)
         if self.n_suffix > 0:
-            c_suffix = c
             for block in self.suffix_blocks.layers:
-                x = block(x, c_suffix)
+                x = block(x, c)
         
         # Same final processing
         x = self.final_layer(x, c)
@@ -179,22 +161,8 @@ class LoopedDiT(nn.Module):
 
 # Looped DiT configs - num_loops can be overridden via config
 # Default num_loops values, but configurable
-LoopedDiT_XL_2 = partial(LoopedDiT, hidden_size=1152, patch_size=2, num_heads=16)
-LoopedDiT_XL_4 = partial(LoopedDiT, hidden_size=1152, patch_size=4, num_heads=16)
-LoopedDiT_XL_8 = partial(LoopedDiT, hidden_size=1152, patch_size=8, num_heads=16)
-LoopedDiT_L_2 = partial(LoopedDiT, hidden_size=1024, patch_size=2, num_heads=16)
-LoopedDiT_L_4 = partial(LoopedDiT, hidden_size=1024, patch_size=4, num_heads=16)
-LoopedDiT_L_8 = partial(LoopedDiT, hidden_size=1024, patch_size=8, num_heads=16)
-LoopedDiT_B_2 = partial(LoopedDiT, hidden_size=768, patch_size=2, num_heads=12)
-LoopedDiT_B_4 = partial(LoopedDiT, hidden_size=768, patch_size=4, num_heads=12)
-LoopedDiT_B_8 = partial(LoopedDiT, hidden_size=768, patch_size=8, num_heads=12)
-LoopedDiT_S_2 = partial(LoopedDiT, hidden_size=384, patch_size=2, num_heads=6)
-LoopedDiT_S_4 = partial(LoopedDiT, hidden_size=384, patch_size=4, num_heads=6)
-LoopedDiT_S_8 = partial(LoopedDiT, hidden_size=384, patch_size=8, num_heads=6)
+LoopedDiT_B_4 = partial(LoopedDiT, hidden_size=768, patch_size=4, num_heads=12, n_prefix=5, n_shared=2, n_loops=6, n_suffix=5)
 
 LoopedDiT_models = {
-    'LoopedDiT-XL/2': LoopedDiT_XL_2,  'LoopedDiT-XL/4': LoopedDiT_XL_4,  'LoopedDiT-XL/8': LoopedDiT_XL_8,
-    'LoopedDiT-L/2':  LoopedDiT_L_2,   'LoopedDiT-L/4':  LoopedDiT_L_4,   'LoopedDiT-L/8':  LoopedDiT_L_8,
-    'LoopedDiT-B/2':  LoopedDiT_B_2,   'LoopedDiT-B/4':  LoopedDiT_B_4,   'LoopedDiT-B/8':  LoopedDiT_B_8,
-    'LoopedDiT-S/2':  LoopedDiT_S_2,   'LoopedDiT-S/4':  LoopedDiT_S_4,   'LoopedDiT-S/8':  LoopedDiT_S_8,
+    'LoopedDiT-B/4':  LoopedDiT_B_4
 }

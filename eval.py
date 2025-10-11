@@ -60,12 +60,18 @@ def _prepare_eval_config(base_cfg, n_loops):
       cfg.wandb.tags = tags
     except Exception:
       pass
-    
-  # Set loop count for LoopedDiT
-  cfg.model.n_loops = int(n_loops)
-  # TODO: NOT HARD CODE loop_emb_max and loop_emb_min here
-  cfg.model.loop_emb_max = 1.0
-  cfg.model.loop_emb_min = 0.0
+
+  train_loops = int(cfg.model.n_loops)
+  eval_loops = int(n_loops)
+  cfg.model.n_loops = eval_loops
+  
+  if cfg.evaluation.stepsize_preserving:
+    if eval_loops < train_loops:
+      # stepsize-preserving
+      # e.g. 6 loops -> 4 loops
+      # 1.0, 0.8, 0.6, 0.4, (0.2, 0.0)
+      cfg.model.loop_emb_min = 1 - (eval_loops - 1) / (train_loops - 1)
+      cfg.model.loop_emb_max = 1.0
   
   return cfg
 

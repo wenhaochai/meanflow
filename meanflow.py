@@ -5,6 +5,7 @@ import jax.numpy as jnp
 # Import your models here
 from models import models_dit
 from models import models_loopeddit
+from models import models_loopeddit_moe
 
 
 def generate(variable, model, rng, n_sample, config, class_idx=None):
@@ -84,6 +85,9 @@ class MeanFlow(nn.Module):
   norm_p:                 float = 1.0
   norm_eps:               float = 0.01
 
+  # MoE auxiliary loss weight (for load balancing)
+  aux_loss_weight:        float = 0.0
+
   # Inference setups
   seed:                   int = 0
   num_steps:              int = 1
@@ -101,8 +105,11 @@ class MeanFlow(nn.Module):
     elif hasattr(models_loopeddit, model_str):
       net_fn = getattr(models_loopeddit, model_str)
       self.net = net_fn(name="net", class_dropout_prob=0.0, **self.model_config)
+    elif hasattr(models_loopeddit_moe, model_str):
+      net_fn = getattr(models_loopeddit_moe, model_str)
+      self.net = net_fn(name="net", class_dropout_prob=0.0, **self.model_config)
     else:
-      raise ValueError(f"Model '{model_str}' not found in models_dit or models_loopeddit")
+      raise ValueError(f"Model '{model_str}' not found in models_dit or models_loopeddit or models_loopeddit_moe")
 
   #######################################################
   # Solver
@@ -171,7 +178,11 @@ class MeanFlow(nn.Module):
 
   def u_fn(self, x, t, h, y, train=True):
     bz = x.shape[0]
-    return self.net(x, t.reshape(bz), h.reshape(bz), y, train=train, key=self.make_rng('gen'))
+    output = self.net(x, t.reshape(bz), h.reshape(bz), y, train=train, key=self.make_rng('gen'))
+    # MoE models return (x, aux_loss), standard models return x
+    if isinstance(output, tuple):
+      return output[0]  # Return only the output, discard aux_loss here
+    return output
   
   def v_fn(self, x, t, y, train=False):
     h = jnp.zeros_like(t)
@@ -232,12 +243,21 @@ class MeanFlow(nn.Module):
 
     # -----------------------------------------------------------------
     # Compute u_tr (average velocity) and du_dt using jvp
+    # Also collect aux_loss from MoE if applicable
+    aux_loss_value = 0.0
+
     def u_fn(z_t, t, r):
       return self.u_fn(z_t, t, t - r, y=y_inp, train=train)
 
     dt_dt = jnp.ones_like(t)
     dr_dt = jnp.zeros_like(t)
     u, du_dt = jax.jvp(u_fn, (z_t, t, r), (v_g, dt_dt, dr_dt))
+
+    # Get aux_loss from MoE model if it exists
+    if train:
+      net_output = self.net(z_t, t.reshape(bz), (t-r).reshape(bz), y_inp, train=train, key=self.make_rng('gen'))
+      if isinstance(net_output, tuple):
+        aux_loss_value = net_output[1]
 
     # -----------------------------------------------------------------
     # Compute loss
@@ -254,6 +274,22 @@ class MeanFlow(nn.Module):
     # -----------------------------------------------------------------
     loss = loss.mean()  # mean over batch
 
+    # Add aux_loss if using MoE (with configurable weight)
+    # Use jax.lax.cond to avoid tracing error with aux_loss_value
+    def add_aux_loss(loss):
+      return loss + self.aux_loss_weight * aux_loss_value
+
+    def no_aux_loss(loss):
+      return loss
+
+    if train:
+      loss = jax.lax.cond(
+        aux_loss_value != 0.0,
+        add_aux_loss,
+        no_aux_loss,
+        loss
+      )
+
     # Velocity loss, monitoring only
     v_loss = (u - v) ** 2
     v_loss = jnp.sum(v_loss, axis=(1, 2, 3))
@@ -262,6 +298,12 @@ class MeanFlow(nn.Module):
       'loss': loss,
       'v_loss': v_loss,
     }
+
+    # Add aux_loss to dict_losses for monitoring
+    # Always add aux_loss (will be 0.0 for non-MoE models)
+    if train:
+      dict_losses['aux_loss'] = aux_loss_value
+
     return loss, dict_losses
 
   def __call__(self, x, t, y, train=False, key=None):

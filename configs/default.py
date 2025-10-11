@@ -72,6 +72,9 @@ def get_config():
   method.norm_p = 1.0
   method.norm_eps = 0.01
 
+  # MoE Auxiliary Loss (for load balancing)
+  method.aux_loss_weight = 0.0
+
   # ------------------------------------------------------------
   # model
   config.model = model = ml_collections.ConfigDict()
@@ -80,10 +83,8 @@ def get_config():
   model.n_shared = 3
   model.n_loops = 4
   model.n_suffix = 0
-  model.use_loop_emb = False  # Whether to use loop-step conditioning
   model.loop_emb_max = 1.0
   model.loop_emb_min = 0.0
-  model.dropout_prob = 0.0
 
   # ------------------------------------------------------------
   # Sampling
@@ -120,7 +121,8 @@ def get_config():
   
   # Loop Evaluation Configuration
   config.evaluation = evaluation = ml_collections.ConfigDict()
-  evaluation.loop_list = [1, 2, 4, 6, 8, 12]    # List of loop counts to evaluate (for LoopedDiT)
+  evaluation.loop_list = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32]    # List of loop counts to evaluate (for LoopedDiT)
+  evaluation.stepsize_preserving = True
 
   # ------------------------------------------------------------
   # System Configuration
