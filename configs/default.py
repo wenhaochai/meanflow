@@ -79,10 +79,13 @@ def get_config():
   # model
   config.model = model = ml_collections.ConfigDict()
   model.cls = 'LoopedDiT_B_4'
-  model.n_prefix = 0
-  model.n_shared = 3
+  model.n_prefix = 2
+  model.n_shared = 2
   model.n_loops = 4
-  model.n_suffix = 0
+  model.n_suffix = 2
+  model.num_experts = 4
+  model.num_active_experts = 1
+  model.num_shared_experts = 0
   model.loop_emb_max = 1.0
   model.loop_emb_min = 0.0
 

@@ -27,25 +27,25 @@ from models.torch_models import TorchLinear, TorchLayerNorm
 
 class MoEMlp(nn.Module):
     """
-    Mixture of Experts MLP layer.
+    Mixture of Experts MLP layer with optional shared experts.
 
     Args:
         in_features: Input feature dimension
         hidden_features: Hidden dimension for each expert
-        num_experts: Total number of experts
+        num_experts: Total number of routed experts
         num_active_experts: Number of experts to activate per token (top-k)
-        expert_capacity_factor: Capacity factor for load balancing
+        num_shared_experts: Number of shared experts (always active)
         use_auxiliary_loss: Whether to compute load balancing loss
     """
     in_features: int
     hidden_features: int
     num_experts: int = 8
     num_active_experts: int = 1
-    expert_capacity_factor: float = 1.25
+    num_shared_experts: int = 0
     use_auxiliary_loss: bool = True
 
     def setup(self):
-        # Create expert MLPs - reuse DiTMlp
+        # Create routed expert MLPs - reuse DiTMlp
         approx_gelu = lambda: partial(nn.gelu, approximate=True)
         self.experts = [
             DiTMlp(
@@ -57,7 +57,19 @@ class MoEMlp(nn.Module):
             for _ in range(self.num_experts)
         ]
 
-        # Router: maps input features to expert scores
+        # Create shared experts (always active) if specified
+        if self.num_shared_experts > 0:
+            self.shared_experts = [
+                DiTMlp(
+                    in_features=self.in_features,
+                    hidden_features=self.hidden_features,
+                    act_layer=approx_gelu,
+                    drop=0
+                )
+                for _ in range(self.num_shared_experts)
+            ]
+
+        # Router: maps input features to expert scores (only for routed experts)
         self.router = DiTLinear(self.in_features, self.num_experts, bias=False)
 
     def _top_k_routing(self, router_logits):
@@ -117,7 +129,7 @@ class MoEMlp(nn.Module):
 
     def __call__(self, x):
         """
-        Forward pass with expert routing.
+        Forward pass with expert routing and shared experts.
 
         Args:
             x: (B, N, C) input tensor
@@ -128,16 +140,28 @@ class MoEMlp(nn.Module):
         """
         B, N, C = x.shape
 
+        # Initialize output
+        output = jnp.zeros_like(x)
+
+        # 1. Process through shared experts (always active)
+        if self.num_shared_experts > 0:
+            # Average output from all shared experts
+            shared_output = jnp.zeros_like(x)
+            for shared_expert in self.shared_experts:
+                shared_output = shared_output + shared_expert(x)
+            # Average the shared expert outputs
+            shared_output = shared_output / self.num_shared_experts
+            output = output + shared_output
+
+        # 2. Process through routed experts (top-k selection)
         # Compute router logits
         router_logits = self.router(x)  # (B, N, num_experts)
 
         # Top-k expert selection
         top_k_indices, top_k_probs, router_probs = self._top_k_routing(router_logits)
 
-        # Process tokens through selected experts
-        # For efficiency, we use vectorized approach
-        output = jnp.zeros_like(x)
-
+        # Process tokens through selected routed experts
+        routed_output = jnp.zeros_like(x)
         for k in range(self.num_active_experts):
             # Get expert index and weight for this k
             expert_idx = top_k_indices[:, :, k]  # (B, N)
@@ -154,9 +178,11 @@ class MoEMlp(nn.Module):
                 # Weighted addition to output
                 # Mask is 0/1, so this automatically ignores non-selected tokens
                 weight_expanded = expert_weight[:, :, None] * mask[:, :, None]  # (B, N, 1)
-                output = output + weight_expanded * expert_output
+                routed_output = routed_output + weight_expanded * expert_output
 
-        # Compute load balancing loss
+        output = output + routed_output
+
+        # Compute load balancing loss (only for routed experts)
         aux_loss = self._compute_load_balance_loss(router_probs, top_k_indices)
 
         return output, aux_loss
@@ -176,6 +202,7 @@ class DiTMoEBlock(nn.Module):
     mlp_ratio: float = 4.0
     num_experts: int = 8
     num_active_experts: int = 1
+    num_shared_experts: int = 0
 
     def setup(self):
         # Reuse norm, attention, and modulation from DiTBlock
@@ -190,7 +217,8 @@ class DiTMoEBlock(nn.Module):
             in_features=self.hidden_size,
             hidden_features=mlp_hidden_dim,
             num_experts=self.num_experts,
-            num_active_experts=self.num_active_experts
+            num_active_experts=self.num_active_experts,
+            num_shared_experts=self.num_shared_experts
         )
 
         # Reuse AdaLN modulation from DiTBlock
@@ -261,6 +289,7 @@ class LoopedDiTMoE(nn.Module):
     # MoE parameters
     num_experts: int = 8
     num_active_experts: int = 1
+    num_shared_experts: int = 0
 
     def setup(self):
         self.out_channels = self.in_channels * 2 if self.learn_sigma else self.in_channels
@@ -292,7 +321,8 @@ class LoopedDiTMoE(nn.Module):
                     self.num_heads,
                     mlp_ratio=self.mlp_ratio,
                     num_experts=self.num_experts,
-                    num_active_experts=self.num_active_experts
+                    num_active_experts=self.num_active_experts,
+                    num_shared_experts=self.num_shared_experts
                 )
                 for _ in range(self.n_shared)
             ])
@@ -387,7 +417,7 @@ class LoopedDiTMoE(nn.Module):
 #                           Model Configurations                                #
 #################################################################################
 
-# LoopedDiT-MoE-B/4: Base model with 8 experts, top-1 routing
+# LoopedDiT-MoE-B/4: Base model with 8 experts, top-1 routing, no shared experts
 LoopedDiTMoE_B_4 = partial(
     LoopedDiTMoE,
     hidden_size=768,
@@ -398,10 +428,27 @@ LoopedDiTMoE_B_4 = partial(
     n_loops=6,
     n_suffix=5,
     num_experts=8,
-    num_active_experts=1
+    num_active_experts=1,
+    num_shared_experts=0
+)
+
+# LoopedDiT-MoE-B/4 with shared experts: 8 routed + 2 shared experts (DeepSeek-style)
+LoopedDiTMoE_B_4_Shared = partial(
+    LoopedDiTMoE,
+    hidden_size=768,
+    patch_size=4,
+    num_heads=12,
+    n_prefix=5,
+    n_shared=2,
+    n_loops=6,
+    n_suffix=5,
+    num_experts=8,
+    num_active_experts=1,
+    num_shared_experts=2
 )
 
 # Model registry
 LoopedDiTMoE_models = {
     'LoopedDiTMoE-B/4': LoopedDiTMoE_B_4,
+    'LoopedDiTMoE-B/4-Shared': LoopedDiTMoE_B_4_Shared,
 }

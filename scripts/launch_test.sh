@@ -5,7 +5,7 @@
 # suggest use absolute path
 export LOG_DIR="/path/to/work/project/meanflow/log_test"
 
-MODEL_CONFIG=${1:-loopb4moe8c1p5s2l6e5}
+MODEL_CONFIG=${1:-debug}
 JOB_NAME=${2:-${MODEL_CONFIG}}
 
 export now=`date '+%Y%m%d_%H%M%S'`
