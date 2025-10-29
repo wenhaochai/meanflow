@@ -110,7 +110,7 @@ class MoEMlp(nn.Module):
             load_balance_loss: scalar
         """
         if not self.use_auxiliary_loss:
-            return 0.0
+            return jnp.asarray(0.0, dtype=router_probs.dtype)
 
         # P_i: Average router probability per expert (soft assignment)
         mean_probs = jnp.mean(router_probs, axis=(0, 1))  # (num_experts,)
@@ -119,7 +119,7 @@ class MoEMlp(nn.Module):
         # Use one-hot encoding to count expert usage (more efficient than loop)
         B, N, k = top_k_indices.shape
         expert_mask = jax.nn.one_hot(top_k_indices, self.num_experts)  # (B, N, k, num_experts)
-        expert_mask = jnp.max(expert_mask, axis=2)  # (B, N, num_experts) - any token selecting expert
+        expert_mask = jnp.sum(expert_mask, axis=2)  # (B, N, num_experts) - any token selecting expert
         expert_usage = jnp.mean(expert_mask, axis=(0, 1)) / self.num_active_experts  # (num_experts,)
 
         # Load balance loss: encourage uniform distribution
@@ -410,7 +410,7 @@ class LoopedDiTMoE(nn.Module):
         x = self.unpatchify(x)
 
         # Return aux_loss for training (load balancing loss)
-        return x, total_aux_loss
+        return x, total_aux_loss / (self.n_shared * self.n_loops)
 
 
 #################################################################################

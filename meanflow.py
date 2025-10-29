@@ -280,6 +280,10 @@ class MeanFlow(nn.Module):
     adp_wt = (loss + self.norm_eps) ** self.norm_p
     loss = loss / jax.lax.stop_gradient(adp_wt)
 
+    aux_loss_monitor = aux_loss
+    aux_adp_wt = (aux_loss + self.norm_eps) ** self.norm_p
+    aux_loss = aux_loss / jax.lax.stop_gradient(aux_adp_wt)
+
     # -----------------------------------------------------------------
     loss = loss.mean()  # mean over batch
     loss = loss + self.aux_loss_weight * aux_loss
@@ -291,7 +295,7 @@ class MeanFlow(nn.Module):
     dict_losses = {
       'loss': loss,
       'v_loss': v_loss,
-      'aux_loss': aux_loss,
+      'aux_loss': aux_loss_monitor,
     }
     return loss, dict_losses
 
