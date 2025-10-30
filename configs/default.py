@@ -83,9 +83,9 @@ def get_config():
   model.n_shared = 2
   model.n_loops = 4
   model.n_suffix = 2
-  model.num_experts = 4
-  model.num_active_experts = 1
-  model.num_shared_experts = 0
+  # model.num_experts = 4
+  # model.num_active_experts = 1
+  # model.num_shared_experts = 0
   model.loop_emb_max = 1.0
   model.loop_emb_min = 0.0
 

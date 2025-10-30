@@ -266,7 +266,12 @@ class MeanFlow(nn.Module):
 
     dt_dt = jnp.ones_like(t)
     dr_dt = jnp.zeros_like(t)
-    (u, aux_loss), (du_dt, _) = jax.jvp(u_fn, (z_t, t, r), (v_g, dt_dt, dr_dt))
+    
+    # no MoE
+    u, du_dt = jax.jvp(u_fn, (z_t, t, r), (v_g, dt_dt, dr_dt))
+    
+    # MoE
+    # (u, aux_loss), (du_dt, _) = jax.jvp(u_fn, (z_t, t, r), (v_g, dt_dt, dr_dt))
 
     # -----------------------------------------------------------------
     # Compute loss
@@ -280,13 +285,14 @@ class MeanFlow(nn.Module):
     adp_wt = (loss + self.norm_eps) ** self.norm_p
     loss = loss / jax.lax.stop_gradient(adp_wt)
 
-    aux_loss_monitor = aux_loss
-    aux_adp_wt = (aux_loss + self.norm_eps) ** self.norm_p
-    aux_loss = aux_loss / jax.lax.stop_gradient(aux_adp_wt)
+    # MoE
+    # aux_loss_monitor = aux_loss
+    # aux_adp_wt = (aux_loss + self.norm_eps) ** self.norm_p
+    # aux_loss = aux_loss / jax.lax.stop_gradient(aux_adp_wt)
 
     # -----------------------------------------------------------------
     loss = loss.mean()  # mean over batch
-    loss = loss + self.aux_loss_weight * aux_loss
+    # loss = loss + self.aux_loss_weight * aux_loss
 
     # Velocity loss, monitoring only
     v_loss = (u - v) ** 2
@@ -295,7 +301,7 @@ class MeanFlow(nn.Module):
     dict_losses = {
       'loss': loss,
       'v_loss': v_loss,
-      'aux_loss': aux_loss_monitor,
+      # 'aux_loss': aux_loss_monitor,
     }
     return loss, dict_losses
 

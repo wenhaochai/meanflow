@@ -2,9 +2,10 @@ model:
     cls: DiT_B_4
 
 training:
+    num_epochs: 80
     sample_on_training: False
     sample_per_epoch: 10
-    fid_per_epoch: 1
+    fid_per_epoch: 10
 
 # Load checkpoints for eval or resuming training.
 # load_from: CKPT_PATH
