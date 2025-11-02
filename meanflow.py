@@ -139,7 +139,8 @@ class MeanFlow(nn.Module):
 
   def _default_schedule(self):
     if self.sampling_timesteps is None:
-      return jnp.array([1.0, 0.0])
+        return jnp.linspace(self.t_end, self.t_start, self.num_steps+1)
+        # return jnp.array([1.0, 0.0])
     return self.sampling_timesteps
 
   #######################################################
