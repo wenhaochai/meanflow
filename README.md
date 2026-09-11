@@ -185,6 +185,22 @@ The table below shows the generative performance under the model size of MF-B/4.
 **Note:** Numbers in FID@80ep are in format "reported in paper / this repo". 
 The 2nd and 3nd row correspond to Table 1. (f) and Table 5, using the same effective guidance scale as $\omega/(1-\kappa)$.
 
+## LoopDiT: Pending Controls
+
+The LoopDiT write-up (wenhaochai.com/blogs/loopdit.html) rests on four comparisons that are not yet compute- or parameter-matched. Each row is one run on ImageNet 256 latent, DiT-B/4 width, MeanFlow objective, CFG 2.0, FID on 50k samples with EMA weights.
+
+| # | Missing control | Config to add | Compare against | Epochs | Status |
+|---|---|---|---|---|---|
+| 1 | Dense DiT with the same effective depth as `loopb4p0s12l2e0` (24 blocks, width 768) | `run_b4_depth24.yml` (`DiT_B_4_D24` partial in `models_dit.py`) | `loopb4p0s12l2e0` 10.14, `loopb4p3s6l2e3` 10.00 | 240 | queued 2026-09-11 (see `logs/experiments.yaml`) |
+| 2 | Compute-matched fixed-8-loop run for the two-stage schedule (4 loops for 80 epochs, then 8 for 160) | `run_loopb4p5s2l8e5_le_cm.yml`: fixed 8 loops, 215 epochs (block-forwards: 80×18 + 160×26 = 5600 = 215.4×26) | two-stage 9.30, fixed 8 loops 9.42 | 215 | queued 2026-09-11 (see `logs/experiments.yaml`) |
+| 3 | Dense MLP with doubled width for the MoE top-2 comparison | `run_loopb4p2s2l6e2_mlp8.yml`: `shared_mlp_ratio: 8.0` (per-segment MLP ratio in `models_loopeddit.py`) | `loopb4moe4c2p2s2l6e2` 13.12 | 80 | queued 2026-09-11 (see `logs/experiments.yaml`) |
+| 4 | Loop-count curve at full training budget, to separate capacity from optimization | `run_loopb4p5s2l16e5_le_240ep.yml`, `run_loopb4p5s2l10e5_le_240ep.yml` | 80-epoch curve: L=10 15.54, L=16 16.51 | 240 | queued 2026-09-11 (see `logs/experiments.yaml`) |
+| 5 | Second seed for the mainline `loopb4p5s2l6e5_le` and for `loopb4p0s12l2e0` | `run_loopb4p5s2l6e5_le_seed43.yml`, `run_loopb4p0s12l2e0_seed43.yml` (`training.seed: 43` + `dataset.shuffle_seed: 43`) | single-seed numbers | 240 | queued 2026-09-11 (see `logs/experiments.yaml`) |
+
+Update the Status column and the blog post together when a row finishes. Live run state: `logs/experiments.yaml` (gitignored) and `log/user/<config>/output.log`.
+
+Notes on the 2026-09 rebuild (branch `pending-controls`): the original scratch (latents, FID stats, checkpoints, `jax` env) was retired, so the pipeline was rebuilt under `/path/to/work` (`scripts/env.sh`, `scripts/sbatch_prepare_data.sh`, `scripts/submit_chain.sh`). `models_loopeddit.py` now exposes `loop_mode`: `token` (default; patchify + pos-embed once and loop in token space, the forward that produced the p/s/e reference numbers above and the only one that supports prefix/suffix blocks) and `pixel` (the Nov-2025 per-loop re-patchify variant that was at HEAD). Runs resume automatically from `checkpoint_*` in a fixed workdir (`auto_resume`).
+
 ## TODO
 
 - [x] Dependencies and sanity check for JAX+GPU. (See [this PR](https://github.com/Gsunshine/meanflow/pull/5).)

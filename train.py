@@ -6,6 +6,7 @@ The data is loaded using pytorch dataset.
 from copy import deepcopy
 from functools import partial
 from typing import Any
+import glob
 import os
 
 import jax
@@ -310,6 +311,9 @@ def train_and_evaluate(
   state = create_train_state(rng, config, model, image_size, lr_value=base_lr)
   if config.load_from is not None:
     state = restore_checkpoint(state, config.load_from)
+  elif config.get('auto_resume', False) and glob.glob(os.path.join(workdir, 'checkpoint_*')):
+    log_for_0('auto_resume: restoring latest checkpoint from %s', workdir)
+    state = restore_checkpoint(state, workdir)
 
   step_offset = int(state.step)
   epoch_offset = step_offset // steps_per_epoch
@@ -403,7 +407,7 @@ def train_and_evaluate(
       (epoch+1) % config.training.checkpoint_per_epoch == 0
       or (epoch+1) == config.training.num_epochs
     ):
-      save_checkpoint(state, workdir, epoch=epoch+1)
+      save_checkpoint(state, workdir, epoch=epoch+1, keep=config.training.checkpoint_keep)
 
     # FID
     if (

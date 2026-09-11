@@ -1,0 +1,24 @@
+# Pending control #5a: second seed of the mainline loopb4p5s2l6e5_le (240 ep).
+# training.seed -> init + noise/time sampling; dataset.shuffle_seed -> data order.
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 6
+    n_suffix: 5
+
+dataset:
+    shuffle_seed: 43
+
+training:
+    seed: 43
+    num_epochs: 240
+    sample_on_training: False
+    fid_per_epoch: 10
+    checkpoint_keep: 2
+
+evaluation:
+    loop_list: [1, 2, 3, 4, 5, 6, 8]
+
+load_from: null
+eval_only: False

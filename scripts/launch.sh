@@ -3,7 +3,7 @@
 # Note: You should update the dataset.root and fid.cache_ref in configs/run_*_config.yml
 
 # suggest use absolute path
-export LOG_DIR="/path/to/work/project/meanflow/log"
+export LOG_DIR="/path/to/work/project/meanflow_private/log"
 
 MODEL_CONFIG=${1:-loopb4p0s2l6e0}
 JOB_NAME=${2:-${MODEL_CONFIG}}

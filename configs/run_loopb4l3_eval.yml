@@ -1,0 +1,12 @@
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 0
+    n_shared: 12
+    n_loops: 3
+    n_suffix: 0
+
+wandb:
+    enable: False
+
+load_from: "/path/to/work/project/meanflow/log/user/loopb4l3_lpe_20251104_055843/checkpoint_80"
+eval_only: True

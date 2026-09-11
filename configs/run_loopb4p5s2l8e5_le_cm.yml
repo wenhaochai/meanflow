@@ -1,0 +1,23 @@
+# Pending control #2: compute-matched fixed-8-loop run for the two-stage schedule
+# (loopb4p5s2l4e5_le 80 ep, then loopb4p5s2l4e5_le_cpt_l8 to 240 ep).
+# Block forwards per sample: L=4 -> 5+2*4+5 = 18, L=8 -> 5+2*8+5 = 26.
+# Two-stage total = 80*18 + 160*26 = 5600 block-epochs; fixed-8 -> 5600/26 = 215.4 -> 215 epochs.
+# Compare against two-stage 9.30 / fixed-8 @240ep 9.42.
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 8
+    n_suffix: 5
+
+training:
+    num_epochs: 215
+    sample_on_training: False
+    fid_per_epoch: 10
+    checkpoint_keep: 2
+
+evaluation:
+    loop_list: [4, 6, 8, 10, 12]
+
+load_from: null
+eval_only: False

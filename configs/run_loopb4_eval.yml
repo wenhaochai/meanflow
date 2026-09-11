@@ -1,19 +1,12 @@
 model:
     cls: LoopedDiT_B_4
-    # Segmented looping architecture parameters
-    n_prefix: 5   # Number of prefix blocks (independent)
-    n_shared: 2   # Number of shared blocks for looping  
-    n_loops: 4    # Number of times to loop the shared blocks
-    n_suffix: 5   # Number of suffix blocks (independent)
-    use_loop_emb: True
-    dropout_prob: 0.0
-
-evaluation:
-    loop_list: [1, 2, 4, 6, 8, 12]
+    n_prefix: 0
+    n_shared: 12
+    n_loops: 3
+    n_suffix: 0
 
 wandb:
     enable: False
 
-load_from: ""
-
+load_from: "/path/to/work/project/meanflow/log/user/loopb4l3_20251029_153557/checkpoint_80"
 eval_only: True

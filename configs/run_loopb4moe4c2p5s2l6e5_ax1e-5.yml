@@ -1,0 +1,16 @@
+model:
+    cls: LoopedDiTMoE_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 6
+    n_suffix: 5
+    num_experts: 4
+    num_active_experts: 2
+
+method:
+    aux_loss_weight: 0.00001  # 1e-5 Load balancing loss weight
+
+training:
+    num_epochs: 80
+    sample_on_training: False
+    fid_per_epoch: 10

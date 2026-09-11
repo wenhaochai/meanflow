@@ -1,0 +1,13 @@
+model:
+    cls: LoopedDiTMoE_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 16
+    n_suffix: 5
+    num_experts: 16
+    num_active_experts: 4
+
+training:
+    num_epochs: 240
+    sample_on_training: False
+    fid_per_epoch: 10

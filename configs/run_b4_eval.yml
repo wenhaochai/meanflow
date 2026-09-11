@@ -1,0 +1,17 @@
+model:
+    cls: DiT_B_4
+
+training:
+    num_epochs: 80
+    sample_on_training: False
+    sample_per_epoch: 10
+    fid_per_epoch: 10
+
+sampling:
+    num_steps: 16
+
+# Load checkpoints for eval or resuming training.
+# load_from: CKPT_PATH
+
+load_from: /path/to/work/project/meanflow/log/user/b4_100ep/checkpoint_400320
+eval_only: True

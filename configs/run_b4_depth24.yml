@@ -1,0 +1,14 @@
+# Pending control #1: dense DiT with the same effective depth as loopb4p0s12l2e0
+# (12 shared blocks x 2 loops = 24 block forwards; here 24 independent blocks, width 768, patch 4).
+# Compare against loopb4p0s12l2e0 10.14 / loopb4p3s6l2e3 10.00 (240 ep).
+model:
+    cls: DiT_B_4_D24
+
+training:
+    num_epochs: 240
+    sample_on_training: False
+    fid_per_epoch: 10
+    checkpoint_keep: 2
+
+load_from: null
+eval_only: False

@@ -1,0 +1,21 @@
+# Pending control #3: dense MLP with doubled width on the shared blocks (mlp_ratio 8 == two
+# active ratio-4 experts) for the MoE top-2 comparison. Compare against loopb4moe4c2p2s2l6e2 13.12 (80 ep).
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 2
+    n_shared: 2
+    n_loops: 6
+    n_suffix: 2
+    shared_mlp_ratio: 8.0
+
+training:
+    num_epochs: 80
+    sample_on_training: False
+    fid_per_epoch: 10
+    checkpoint_keep: 2
+
+evaluation:
+    loop_list: [2, 4, 6, 8]
+
+load_from: null
+eval_only: False

@@ -165,6 +165,7 @@ def create_latent_split(dataset_cfg, batch_size, split):
       num_replicas=jax.process_count(),
       rank=rank,
       shuffle=True,
+      seed=dataset_cfg.get('shuffle_seed', 0),
     )
     it = DataLoader(
       ds, batch_size=batch_size, drop_last=True,

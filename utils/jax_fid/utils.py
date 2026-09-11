@@ -8,7 +8,7 @@ from tqdm import tqdm
 def download(url, ckpt_dir=None):
     name = url[url.rfind('/') + 1 : url.rfind('?')]
     if ckpt_dir is None:
-        ckpt_dir = tempfile.gettempdir()
+        ckpt_dir = os.environ.get('JAX_FID_CKPT_DIR', tempfile.gettempdir())
     ckpt_dir = os.path.join(ckpt_dir, 'jax_fid')
     ckpt_file = os.path.join(ckpt_dir, name)
     if not os.path.exists(ckpt_file):

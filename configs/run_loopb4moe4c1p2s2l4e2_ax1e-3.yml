@@ -1,0 +1,23 @@
+# param: 2 + 2 * 4 + 2 = 12
+# compute: 2 + 2 * 4 + 2 = 12
+
+model:
+    cls: LoopedDiTMoE_B_4
+    n_prefix: 2
+    n_shared: 2
+    n_loops: 4
+    n_suffix: 2
+    num_experts: 4
+    num_active_experts: 1
+    num_shared_experts: 0
+
+method:
+    aux_loss_weight: 0.0003
+
+training:
+    num_epochs: 240
+    sample_on_training: False
+    fid_per_epoch: 10
+
+load_from: null
+eval_only: False

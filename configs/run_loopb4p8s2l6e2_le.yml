@@ -1,0 +1,13 @@
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 8
+    n_shared: 2
+    n_loops: 6
+    n_suffix: 2
+    use_loop_emb: True
+    dropout_prob: 0.0
+
+training:
+    sample_on_training: False
+    fid_per_epoch: 10
+    

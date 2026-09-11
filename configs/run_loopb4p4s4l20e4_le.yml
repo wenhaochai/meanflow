@@ -1,0 +1,20 @@
+model:
+    cls: LoopedDiT_B_4
+    # Segmented looping architecture parameters
+    n_prefix: 4   # Number of prefix blocks (independent)
+    n_shared: 4   # Number of shared blocks for looping  
+    n_loops: 20    # Number of times to loop the shared blocks
+    n_suffix: 4   # Number of suffix blocks (independent)
+    use_loop_emb: True
+    use_input_injection: False
+    use_noise_init: False
+
+training:
+    sample_on_training: False
+    fid_per_epoch: 10
+
+# Load checkpoints for eval or resuming training.
+# load_from: CKPT_PATH
+
+load_from: null
+eval_only: False

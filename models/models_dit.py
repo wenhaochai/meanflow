@@ -294,6 +294,7 @@ DiT_M_4 = partial(DiT, depth=16, hidden_size=1024, patch_size=4, num_heads=16)
 DiT_M_8 = partial(DiT, depth=16, hidden_size=1024, patch_size=8, num_heads=16)
 DiT_B_2 = partial(DiT, depth=12, hidden_size=768, patch_size=2, num_heads=12)
 DiT_B_4 = partial(DiT, depth=12, hidden_size=768, patch_size=4, num_heads=12)
+DiT_B_4_D24 = partial(DiT, depth=24, hidden_size=768, patch_size=4, num_heads=12)  # depth-matched dense control for loopb4p0s12l2e0
 DiT_B_8 = partial(DiT, depth=12, hidden_size=768, patch_size=8, num_heads=12)
 DiT_S_2 = partial(DiT, depth=12, hidden_size=384, patch_size=2, num_heads=6)
 DiT_S_4 = partial(DiT, depth=12, hidden_size=384, patch_size=4, num_heads=6)

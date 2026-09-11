@@ -11,7 +11,7 @@ from optax._src.alias import *
 NUM_CLASSES = 1000
 
 
-def create_imagenet_dataloader(imagenet_root, split, batch_size, image_size, num_workers=4, for_fid=False):
+def create_imagenet_dataloader(imagenet_root, split, batch_size, image_size, num_workers=16, for_fid=False):
     """Create ImageNet dataloader for the specified split."""
     from torch.utils.data import DataLoader
     from torch.utils.data.distributed import DistributedSampler

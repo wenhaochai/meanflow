@@ -1,0 +1,14 @@
+model:
+    cls: DiT_B_4
+
+training:
+    sample_on_training: False
+    sample_per_epoch: 10
+    fid_per_epoch: 1
+    ema_val: 0.999
+
+# Load checkpoints for eval or resuming training.
+# load_from: CKPT_PATH
+
+load_from: null
+eval_only: False

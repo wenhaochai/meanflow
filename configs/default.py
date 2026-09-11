@@ -13,12 +13,13 @@ def get_config():
   config.dataset = dataset = ml_collections.ConfigDict()
   
   dataset.name = 'imgnet_latent'
-  dataset.root = '/path/to/work/data/imagenet/train_merged_backup.pt'
+  dataset.root = '/path/to/work/data/meanflow/train_merged.pt'
 
   dataset.num_workers = 0
   dataset.prefetch_factor = 2
   dataset.pin_memory = False
   dataset.cache = False
+  dataset.shuffle_seed = 0   # DistributedSampler seed (data order); training.seed covers init/noise
 
   dataset.image_size = 32 
   dataset.image_channels = 4 
@@ -34,9 +35,10 @@ def get_config():
 
   training.num_epochs = 80
   training.log_per_step = 100
-  training.sample_on_training = False
-  training.sample_per_epoch = 10
+  training.sample_on_training = True
+  training.sample_per_epoch = 1
   training.checkpoint_per_epoch = 10
+  training.checkpoint_keep = 999
   training.fid_per_epoch = 10
   training.half_precision = False # Not supported
   
@@ -105,13 +107,13 @@ def get_config():
   fid.num_samples = 50000
   fid.device_batch_size = 16
   fid.stats_batch_size = 200
-  fid.cache_ref = '/path/to/work/data/imagenet/imgnet256_adm.npz'
+  fid.cache_ref = '/path/to/work/data/meanflow/imgnet256_adm.npz'
 
   # ------------------------------------------------------------
   # WandB (Weights & Biases) Configuration
   config.wandb = wandb = ml_collections.ConfigDict()
   wandb.enable = False                    # Enable/disable wandb logging
-  wandb.root = '/path/to/work/project/meanflow'
+  wandb.root = '/path/to/work/project/meanflow_private'
   wandb.project = 'meanflow'             # WandB project name
   wandb.entity = 'reself'                # WandB entity (username/team), None for default
   wandb.name = None                      # Run name, None for auto-generated
@@ -131,7 +133,7 @@ def get_config():
   # System Configuration
   config.system = system = ml_collections.ConfigDict()
   system.set_compilation_cache = True  # Whether to set JAX compilation cache
-  system.jax_compilation_cache_root = '/path/to/work/jax_cache'  # JAX compilation cache root directory
+  system.jax_compilation_cache_root = '/path/to/work/cache/jax_cache'  # JAX compilation cache root directory
   system.cache_min_compile_time = 0.1  # Minimum compilation time (seconds) to cache
   system.cache_max_size_gb = 5  # Maximum cache size in GB
   system.cache_debug = False  # Enable cache debugging and miss explanation
@@ -139,6 +141,7 @@ def get_config():
   # others
   config.load_from = None
   config.eval_only = False
+  config.auto_resume = True  # resume from the latest checkpoint_* in workdir when load_from is None
 
   return config
 

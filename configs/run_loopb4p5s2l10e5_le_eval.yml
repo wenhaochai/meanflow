@@ -1,0 +1,26 @@
+model:
+    cls: LoopedDiT_B_4
+    # Segmented looping architecture parameters
+    n_prefix: 5   # Number of prefix blocks (independent)
+    n_shared: 2   # Number of shared blocks for looping  
+    n_loops: 10    # Number of times to loop the shared blocks
+    n_suffix: 5   # Number of suffix blocks (independent)
+    use_loop_emb: True
+    use_input_injection: False
+    input_injection_mode: 'add'
+    use_noise_init: False
+    noise_std: 1.0
+
+training:
+    sample_on_training: False
+    sample_per_epoch: 10
+    fid_per_epoch: 1
+
+evaluation:
+    loop_list: [1, 2, 3, 4, 6, 8, 12, 16, 20]
+
+# Load checkpoints for eval or resuming training.
+# load_from: CKPT_PATH
+
+load_from: "/path/to/work/project/meanflow/log/user/loopb4p5s2l10e5_le_20250914_200147/checkpoint_80"
+eval_only: False

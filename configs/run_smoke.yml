@@ -1,0 +1,30 @@
+# GPU smoke test on a 4096-sample fake latent file: 2 epochs, tiny FID, all new model paths exercised via loop_list.
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 6
+    n_suffix: 5
+    shared_mlp_ratio: 8.0
+
+dataset:
+    root: /path/to/work/data/meanflow/train_merged_fake4096.pt
+    shuffle_seed: 43
+
+training:
+    seed: 43
+    num_epochs: 2
+    log_per_step: 4
+    checkpoint_per_epoch: 1
+    checkpoint_keep: 2
+    fid_per_epoch: 1
+    sample_on_training: False
+
+fid:
+    num_samples: 512
+
+evaluation:
+    loop_list: [2, 6]
+
+load_from: null
+eval_only: False

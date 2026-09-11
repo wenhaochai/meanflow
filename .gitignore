@@ -171,3 +171,11 @@ data
 scripts/
 log/
 test/
+# run artifacts
+log/
+logs/
+slurm_logs/
+log_test/user/smoke_*
+wandb/
+configs/temp_eval_*.yml
+configs/run_smoke_d24.yml

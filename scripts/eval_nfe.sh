@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=256G
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --partition=your_partition
 #SBATCH --time=01:00:00
 #SBATCH --qos=your_qos

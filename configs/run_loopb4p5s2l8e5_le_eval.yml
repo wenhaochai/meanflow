@@ -1,0 +1,14 @@
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 8
+    n_suffix: 5
+    use_loop_emb: True
+    dropout_prob: 0.0
+
+evaluation:
+    loop_list: [1, 2, 4, 6, 8, 12, 16]
+
+load_from: "/path/to/work/project/meanflow/log/user/loopb4p5s2l8e5_le_20250914_090120/checkpoint_80"
+eval_only: True

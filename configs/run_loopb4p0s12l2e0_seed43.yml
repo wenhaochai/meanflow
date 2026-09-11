@@ -1,0 +1,23 @@
+# Pending control #5b: second seed of loopb4p0s12l2e0 (240 ep), token-space looping (loop_mode default).
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 0
+    n_shared: 12
+    n_loops: 2
+    n_suffix: 0
+
+dataset:
+    shuffle_seed: 43
+
+training:
+    seed: 43
+    num_epochs: 240
+    sample_on_training: False
+    fid_per_epoch: 10
+    checkpoint_keep: 2
+
+evaluation:
+    loop_list: [1, 2, 3, 4]
+
+load_from: null
+eval_only: False

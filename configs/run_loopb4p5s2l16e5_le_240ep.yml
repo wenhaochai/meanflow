@@ -1,0 +1,20 @@
+# Pending control #4: loop-count curve at the full 240-epoch budget (L=16), to separate capacity from
+# optimization. 80-ep reference: L=10 15.54, L=16 16.51.
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 5
+    n_shared: 2
+    n_loops: 16
+    n_suffix: 5
+
+training:
+    num_epochs: 240
+    sample_on_training: False
+    fid_per_epoch: 10
+    checkpoint_keep: 2
+
+evaluation:
+    loop_list: [4, 6, 8, 10, 12, 16, 20]
+
+load_from: null
+eval_only: False

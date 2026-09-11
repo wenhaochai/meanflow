@@ -1,0 +1,14 @@
+model:
+    cls: LoopedDiT_B_4
+    n_prefix: 0
+    n_shared: 12
+    n_loops: 3
+    n_suffix: 0
+
+training:
+    num_epochs: 240
+    sample_on_training: True
+    fid_per_epoch: 10
+
+load_from: null
+eval_only: False

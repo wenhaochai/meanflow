@@ -1,0 +1,9 @@
+model:
+    cls: DiT_XL_2
+
+training:
+    sample_on_training: False
+    fid_per_epoch: 10
+
+load_from: Null
+eval_only: False
